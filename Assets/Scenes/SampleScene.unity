@@ -523,6 +523,63 @@ MonoBehaviour:
   m_ShadowLayerMask: 1
   m_RenderingLayers: 1
   m_ShadowRenderingLayers: 1
+--- !u!1001 &792869180
+PrefabInstance:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Modification:
+    serializedVersion: 3
+    m_TransformParent: {fileID: 0}
+    m_Modifications:
+    - target: {fileID: -8679921383154817045, guid: eec2d6bc454ffd745bcb29ac08033441, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: 18.7258
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: eec2d6bc454ffd745bcb29ac08033441, type: 3}
+      propertyPath: m_LocalPosition.y
+      value: 25.73
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: eec2d6bc454ffd745bcb29ac08033441, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: -34.75
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: eec2d6bc454ffd745bcb29ac08033441, type: 3}
+      propertyPath: m_LocalRotation.w
+      value: 0.5918943
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: eec2d6bc454ffd745bcb29ac08033441, type: 3}
+      propertyPath: m_LocalRotation.x
+      value: 0.5047691
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: eec2d6bc454ffd745bcb29ac08033441, type: 3}
+      propertyPath: m_LocalRotation.y
+      value: 0.019995952
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: eec2d6bc454ffd745bcb29ac08033441, type: 3}
+      propertyPath: m_LocalRotation.z
+      value: 0.62806815
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: eec2d6bc454ffd745bcb29ac08033441, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: eec2d6bc454ffd745bcb29ac08033441, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: eec2d6bc454ffd745bcb29ac08033441, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 919132149155446097, guid: eec2d6bc454ffd745bcb29ac08033441, type: 3}
+      propertyPath: m_Name
+      value: StalkerLowPolyPreFuckery
+      objectReference: {fileID: 0}
+    m_RemovedComponents: []
+    m_RemovedGameObjects: []
+    m_AddedGameObjects: []
+    m_AddedComponents: []
+  m_SourcePrefab: {fileID: 100100000, guid: eec2d6bc454ffd745bcb29ac08033441, type: 3}
 --- !u!1 &832575517
 GameObject:
   m_ObjectHideFlags: 0
@@ -949,7 +1006,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::PlayerMovement
   moveSpeed: 7
   groundDrag: 5
-  jumpForce: 12
+  jumpForce: 7
   jumpCooldown: 0.25
   airMultiplier: 0.4
   jumpKey: 32
@@ -1140,3 +1197,4 @@ SceneRoots:
   - {fileID: 952971894}
   - {fileID: 1067009773}
   - {fileID: 1445823969}
+  - {fileID: 792869180}
