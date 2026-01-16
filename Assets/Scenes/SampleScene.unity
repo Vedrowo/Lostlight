@@ -523,63 +523,6 @@ MonoBehaviour:
   m_ShadowLayerMask: 1
   m_RenderingLayers: 1
   m_ShadowRenderingLayers: 1
---- !u!1001 &792869180
-PrefabInstance:
-  m_ObjectHideFlags: 0
-  serializedVersion: 2
-  m_Modification:
-    serializedVersion: 3
-    m_TransformParent: {fileID: 0}
-    m_Modifications:
-    - target: {fileID: -8679921383154817045, guid: eec2d6bc454ffd745bcb29ac08033441, type: 3}
-      propertyPath: m_LocalPosition.x
-      value: 18.7258
-      objectReference: {fileID: 0}
-    - target: {fileID: -8679921383154817045, guid: eec2d6bc454ffd745bcb29ac08033441, type: 3}
-      propertyPath: m_LocalPosition.y
-      value: 25.73
-      objectReference: {fileID: 0}
-    - target: {fileID: -8679921383154817045, guid: eec2d6bc454ffd745bcb29ac08033441, type: 3}
-      propertyPath: m_LocalPosition.z
-      value: -34.75
-      objectReference: {fileID: 0}
-    - target: {fileID: -8679921383154817045, guid: eec2d6bc454ffd745bcb29ac08033441, type: 3}
-      propertyPath: m_LocalRotation.w
-      value: 0.5918943
-      objectReference: {fileID: 0}
-    - target: {fileID: -8679921383154817045, guid: eec2d6bc454ffd745bcb29ac08033441, type: 3}
-      propertyPath: m_LocalRotation.x
-      value: 0.5047691
-      objectReference: {fileID: 0}
-    - target: {fileID: -8679921383154817045, guid: eec2d6bc454ffd745bcb29ac08033441, type: 3}
-      propertyPath: m_LocalRotation.y
-      value: 0.019995952
-      objectReference: {fileID: 0}
-    - target: {fileID: -8679921383154817045, guid: eec2d6bc454ffd745bcb29ac08033441, type: 3}
-      propertyPath: m_LocalRotation.z
-      value: 0.62806815
-      objectReference: {fileID: 0}
-    - target: {fileID: -8679921383154817045, guid: eec2d6bc454ffd745bcb29ac08033441, type: 3}
-      propertyPath: m_LocalEulerAnglesHint.x
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: -8679921383154817045, guid: eec2d6bc454ffd745bcb29ac08033441, type: 3}
-      propertyPath: m_LocalEulerAnglesHint.y
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: -8679921383154817045, guid: eec2d6bc454ffd745bcb29ac08033441, type: 3}
-      propertyPath: m_LocalEulerAnglesHint.z
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 919132149155446097, guid: eec2d6bc454ffd745bcb29ac08033441, type: 3}
-      propertyPath: m_Name
-      value: StalkerLowPolyPreFuckery
-      objectReference: {fileID: 0}
-    m_RemovedComponents: []
-    m_RemovedGameObjects: []
-    m_AddedGameObjects: []
-    m_AddedComponents: []
-  m_SourcePrefab: {fileID: 100100000, guid: eec2d6bc454ffd745bcb29ac08033441, type: 3}
 --- !u!1 &832575517
 GameObject:
   m_ObjectHideFlags: 0
@@ -815,6 +758,69 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1001 &1179024585
+PrefabInstance:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Modification:
+    serializedVersion: 3
+    m_TransformParent: {fileID: 0}
+    m_Modifications:
+    - target: {fileID: -8679921383154817045, guid: 390d1d752925dff48946a9e21b5eac08, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: 4.34258
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 390d1d752925dff48946a9e21b5eac08, type: 3}
+      propertyPath: m_LocalPosition.y
+      value: 18.00447
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 390d1d752925dff48946a9e21b5eac08, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: -26.81049
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 390d1d752925dff48946a9e21b5eac08, type: 3}
+      propertyPath: m_LocalRotation.w
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 390d1d752925dff48946a9e21b5eac08, type: 3}
+      propertyPath: m_LocalRotation.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 390d1d752925dff48946a9e21b5eac08, type: 3}
+      propertyPath: m_LocalRotation.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 390d1d752925dff48946a9e21b5eac08, type: 3}
+      propertyPath: m_LocalRotation.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 390d1d752925dff48946a9e21b5eac08, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 390d1d752925dff48946a9e21b5eac08, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 390d1d752925dff48946a9e21b5eac08, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 919132149155446097, guid: 390d1d752925dff48946a9e21b5eac08, type: 3}
+      propertyPath: m_Name
+      value: Stalker
+      objectReference: {fileID: 0}
+    m_RemovedComponents: []
+    m_RemovedGameObjects: []
+    m_AddedGameObjects: []
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 390d1d752925dff48946a9e21b5eac08, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 1296328832}
+    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 390d1d752925dff48946a9e21b5eac08, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 1296328834}
+  m_SourcePrefab: {fileID: 100100000, guid: 390d1d752925dff48946a9e21b5eac08, type: 3}
 --- !u!1 &1179624513
 GameObject:
   m_ObjectHideFlags: 0
@@ -929,6 +935,46 @@ MeshFilter:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1179624513}
   m_Mesh: {fileID: 10208, guid: 0000000000000000e000000000000000, type: 0}
+--- !u!1 &1296328831 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 919132149155446097, guid: 390d1d752925dff48946a9e21b5eac08, type: 3}
+  m_PrefabInstance: {fileID: 1179024585}
+  m_PrefabAsset: {fileID: 0}
+--- !u!95 &1296328832
+Animator:
+  serializedVersion: 7
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1296328831}
+  m_Enabled: 1
+  m_Avatar: {fileID: 0}
+  m_Controller: {fileID: 9100000, guid: 659e66a5bd996d84d977a598dfadfbdc, type: 2}
+  m_CullingMode: 0
+  m_UpdateMode: 0
+  m_ApplyRootMotion: 0
+  m_LinearVelocityBlending: 0
+  m_StabilizeFeet: 0
+  m_AnimatePhysics: 0
+  m_WarningMessage: 
+  m_HasTransformHierarchy: 1
+  m_AllowConstantClipSamplingOptimization: 1
+  m_KeepAnimatorStateOnDisable: 0
+  m_WriteDefaultValuesOnDisable: 0
+--- !u!114 &1296328834
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1296328831}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5da3e47812bce0b49a9a9113733a4a84, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::StalkerMove
+  speed: 5
 --- !u!1 &1310492908
 GameObject:
   m_ObjectHideFlags: 0
@@ -1197,4 +1243,4 @@ SceneRoots:
   - {fileID: 952971894}
   - {fileID: 1067009773}
   - {fileID: 1445823969}
-  - {fileID: 792869180}
+  - {fileID: 1179024585}
