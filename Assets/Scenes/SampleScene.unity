@@ -693,8 +693,22 @@ MonoBehaviour:
   - {fileID: 1971014816}
   patrolLoop: 1
   waypointTolerance: 0.5
-  chaseSpeedMultiplier: 2
-  groundCheckDistance: 4
+  chaseSpeedMultiplier: 1.2
+  attackRange: 1.2
+  obstacleTag: Obstacle
+  collisionStunDuration: 0.5
+  attackOnPlayerCollision: 1
+  attackTriggerName: Attack
+  obstacleAvoidanceDistance: 1
+  avoidanceTurnAngle: 90
+  stepHeight: 0.35
+  stepSmooth: 8
+  maxSlopeAngle: 50
+  groundSampleDistance: 0.6
+  stuckCheckInterval: 0.5
+  stuckMoveThreshold: 0.05
+  stuckTimeout: 1.5
+  groundCheckDistance: 10
   groundMask:
     serializedVersion: 2
     m_Bits: 64
@@ -723,6 +737,28 @@ Animator:
   m_AllowConstantClipSamplingOptimization: 1
   m_KeepAnimatorStateOnDisable: 0
   m_WriteDefaultValuesOnDisable: 0
+--- !u!195 &998947630
+NavMeshAgent:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 998947626}
+  m_Enabled: 1
+  m_AgentTypeID: 0
+  m_Radius: 0.5
+  m_Speed: 3.5
+  m_Acceleration: 8
+  avoidancePriority: 50
+  m_AngularSpeed: 120
+  m_StoppingDistance: 0
+  m_AutoTraverseOffMeshLink: 1
+  m_AutoBraking: 1
+  m_AutoRepath: 1
+  m_Height: 2
+  m_BaseOffset: 0
+  m_WalkableMask: 4294967295
+  m_ObstacleAvoidanceType: 4
 --- !u!1001 &1026423863
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -737,11 +773,11 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 8db6d47b94021ae4a9a2d261f48d7019, type: 3}
       propertyPath: m_LocalPosition.y
-      value: 17.87
+      value: 18.62
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 8db6d47b94021ae4a9a2d261f48d7019, type: 3}
       propertyPath: m_LocalPosition.z
-      value: -32.57421
+      value: -28.95
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 8db6d47b94021ae4a9a2d261f48d7019, type: 3}
       propertyPath: m_LocalRotation.w
@@ -785,6 +821,9 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 8db6d47b94021ae4a9a2d261f48d7019, type: 3}
       insertIndex: -1
       addedObject: {fileID: 998947627}
+    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 8db6d47b94021ae4a9a2d261f48d7019, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 998947630}
   m_SourcePrefab: {fileID: 100100000, guid: 8db6d47b94021ae4a9a2d261f48d7019, type: 3}
 --- !u!1 &1067009770
 GameObject:

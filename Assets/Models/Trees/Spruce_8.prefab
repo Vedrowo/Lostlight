@@ -813,6 +813,7 @@ GameObject:
   - component: {fileID: 2410328921717133426}
   - component: {fileID: 5624496201835328202}
   - component: {fileID: 6813193416405833651}
+  - component: {fileID: 5957798016604982010}
   m_Layer: 0
   m_Name: Spruce8_LOD0
   m_TagString: Untagged
@@ -939,6 +940,22 @@ CapsuleCollider:
   m_Height: 5.81456
   m_Direction: 1
   m_Center: {x: -0.16, y: 2.9072375, z: 0.42}
+--- !u!208 &5957798016604982010
+NavMeshObstacle:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6544832405865403371}
+  m_Enabled: 1
+  serializedVersion: 3
+  m_Shape: 1
+  m_Extents: {x: 0.695, y: 2.907, z: 0.65}
+  m_MoveThreshold: 0.1
+  m_Carve: 1
+  m_CarveOnlyStationary: 1
+  m_Center: {x: -0.187, y: 2.907, z: 0.441}
+  m_TimeToStationary: 0.5
 --- !u!1 &6918289363916622346
 GameObject:
   m_ObjectHideFlags: 0

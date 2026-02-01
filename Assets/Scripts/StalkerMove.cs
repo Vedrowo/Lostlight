@@ -1,17 +1,16 @@
 using UnityEngine;
+using UnityEngine.AI;
 
 public class StalkerMove : MonoBehaviour
 {
-    public float speed;
-    public float rotationSpeed = 5f;
-
-    public string targetTag = "Player";
-    Transform target;
+    [Header("Movement")]
+    public float speed = 3.5f;
+    public float rotationSpeed = 5f; // used for Animator/visuals if needed
 
     [Header("Detection")]
-    public float detectionRadius = 40f; // start chasing inside this radius
-    public float loseRadius = 50f;      // stop chasing when target goes beyond this
-    [Tooltip("If true the stalker will constantly search for objects with `targetTag` each Update.")]
+    public string targetTag = "Player";
+    public float detectionRadius = 40f;
+    public float loseRadius = 50f;
     public bool constantlySearchForTarget = true;
 
     [Header("Patrol")]
@@ -20,66 +19,66 @@ public class StalkerMove : MonoBehaviour
     public float waypointTolerance = 0.5f;
 
     [Header("Chase")]
-    [Tooltip("Multiplier applied to `speed` while chasing.")]
+        [Tooltip("Multiplier applied to `speed` while chasing")]
     public float chaseSpeedMultiplier = 1.5f;
+    public float attackRange = 1.2f;
+    public float attackCooldown = 0.8f;
 
-    [Header("Grounding")]
-    public float groundCheckDistance = 5f;
-    public LayerMask groundMask;
-    [Tooltip("How fast the stalker snaps to ground height (higher = faster).")]
-    public float groundSnapSpeed = 20f;
-
-    [Header("Animation")]
-    [Tooltip("Animator component (assign in inspector or will attempt to find one on Start).")]
+    [Header("Animator")]
     public Animator animator;
-    [Tooltip("Animator bool parameter name that triggers run animation when true.")]
     public string runParamName = "isRunning";
+    public string attackTriggerName = "Attack";
 
+    [Header("Stuck recovery")]
+    public float stuckVelocityThreshold = 0.05f;
+    public float stuckCheckInterval = 0.6f;
+    public float stuckResetDelay = 0.25f;
+
+    NavMeshAgent agent;
     int patrolIndex;
     bool isChasing;
     Transform currentTarget;
+    float lastAttackTime;
+    float lastStuckCheck;
+    Vector3 lastStuckPos;
 
     void Start()
     {
-        patrolIndex = 0;
-        // if a matching tag exists in the scene, keep a reference if desired (target will be updated each frame)
-        var initial = GameObject.FindGameObjectWithTag(targetTag);
-        if (initial != null) target = initial.transform;
+        agent = GetComponent<NavMeshAgent>();
+        if (agent == null)
+            agent = gameObject.AddComponent<NavMeshAgent>();
 
+        // configure agent sensible defaults (tweak in inspector)
+        agent.speed = speed;
+        agent.acceleration = 8f;
+        agent.angularSpeed = 120f;
+        agent.stoppingDistance = attackRange;
+        agent.autoBraking = true;
+        agent.updateRotation = true;
+        agent.updateUpAxis = true;
+
+        patrolIndex = 0;
+        lastAttackTime = -999f;
+        lastStuckCheck = Time.time;
+        lastStuckPos = transform.position;
+
+        // optional: animator find
         if (animator == null)
             animator = GetComponent<Animator>() ?? GetComponentInChildren<Animator>();
     }
 
     void Update()
     {
-        // constantly check for nearest target if configured
         if (constantlySearchForTarget)
             UpdateTarget();
 
         if (isChasing && currentTarget != null)
-            ChaseTarget();
+            DoChase();
         else
-            Patrol();
+            DoPatrol();
 
-        // Update animation state (walk <-> run)
         UpdateAnimation();
-
-        // Keep the stalker grounded
-        Vector3 rayOrigin = transform.position + Vector3.up * 0.5f;
-        if (Physics.Raycast(rayOrigin, Vector3.down, out RaycastHit hit, groundCheckDistance, groundMask))
-        {
-            float targetY = hit.point.y;
-            Vector3 groundedPos = new Vector3(transform.position.x, targetY, transform.position.z);
-            transform.position = Vector3.Lerp(transform.position, groundedPos, Mathf.Clamp01(Time.deltaTime * groundSnapSpeed));
-        }
-    }
-
-    void UpdateAnimation()
-    {
-        if (animator == null || string.IsNullOrEmpty(runParamName)) return;
-
-        // Set run boolean to match chasing state -> transitions should be defined in Animator
-        animator.SetBool(runParamName, isChasing);
+        RunStuckCheck();
     }
 
     void UpdateTarget()
@@ -87,15 +86,17 @@ public class StalkerMove : MonoBehaviour
         var candidates = GameObject.FindGameObjectsWithTag(targetTag);
         Transform nearest = null;
         float nearestSqr = Mathf.Infinity;
+        Vector3 pos = transform.position;
 
         for (int i = 0; i < candidates.Length; i++)
         {
-            var t = candidates[i].transform;
-            float dsq = (t.position - transform.position).sqrMagnitude;
+            Vector3 diff = candidates[i].transform.position - pos;
+            diff.y = 0f;
+            float dsq = diff.sqrMagnitude;
             if (dsq < nearestSqr)
             {
                 nearestSqr = dsq;
-                nearest = t;
+                nearest = candidates[i].transform;
             }
         }
 
@@ -132,43 +133,101 @@ public class StalkerMove : MonoBehaviour
         }
     }
 
-    void ChaseTarget()
+    void DoChase()
     {
-        Vector3 direction = currentTarget.position - transform.position;
-        direction.y = 0f;
-        if (direction.sqrMagnitude <= 0.0001f) return;
+        if (currentTarget == null) return;
 
-        Quaternion targetRot = Quaternion.LookRotation(direction.normalized, Vector3.up);
-        transform.rotation = Quaternion.Slerp(transform.rotation, targetRot, rotationSpeed * Time.deltaTime);
+        // update agent speed & destination
+        agent.speed = speed * chaseSpeedMultiplier;
+        agent.stoppingDistance = attackRange;
 
-        float moveSpeed = speed * chaseSpeedMultiplier;
-        transform.position += transform.forward * moveSpeed * Time.deltaTime;
+        // set destination every frame for moving targets
+        agent.SetDestination(currentTarget.position);
+
+        // if close enough, trigger attack
+        float sqrDist = (currentTarget.position - transform.position).sqrMagnitude;
+        if (sqrDist <= attackRange * attackRange && Time.time >= lastAttackTime + attackCooldown)
+        {
+            // stop and attack (agent will keep orientation by default)
+            agent.isStopped = true;
+            if (animator != null && !string.IsNullOrEmpty(attackTriggerName))
+                animator.SetTrigger(attackTriggerName);
+            lastAttackTime = Time.time;
+            Invoke(nameof(ResumeAgentAfterAttack), attackCooldown);
+        }
+        else
+        {
+            agent.isStopped = false;
+        }
     }
 
-    void Patrol()
+    void ResumeAgentAfterAttack()
     {
-        if (patrolPoints == null || patrolPoints.Length == 0) return;
+        if (agent != null) agent.isStopped = false;
+    }
 
-        Transform waypoint = patrolPoints[patrolIndex];
-        Vector3 dir = waypoint.position - transform.position;
-        dir.y = 0f;
+    void DoPatrol()
+    {
+        agent.speed = speed;
+        agent.stoppingDistance = 0.2f;
+        agent.autoBraking = false;
 
-        if (dir.sqrMagnitude <= waypointTolerance * waypointTolerance)
+        if (patrolPoints == null || patrolPoints.Length == 0)
         {
-            // advance waypoint
-            patrolIndex++;
-            if (patrolIndex >= patrolPoints.Length)
-            {
-                if (patrolLoop) patrolIndex = 0;
-                else patrolIndex = patrolPoints.Length - 1; // stay at last
-            }
+            agent.ResetPath();
             return;
         }
 
-        Quaternion targetRot = Quaternion.LookRotation(dir.normalized, Vector3.up);
-        transform.rotation = Quaternion.Slerp(transform.rotation, targetRot, rotationSpeed * Time.deltaTime);
+        if (!agent.hasPath)
+        {
+            agent.SetDestination(patrolPoints[patrolIndex].position);
+        }
+        else
+        {
+            float remaining = agent.remainingDistance;
+            if (!agent.pathPending && remaining <= waypointTolerance)
+            {
+                // advance waypoint
+                patrolIndex++;
+                if (patrolIndex >= patrolPoints.Length)
+                {
+                    if (patrolLoop) patrolIndex = 0;
+                    else patrolIndex = patrolPoints.Length - 1;
+                }
+                agent.SetDestination(patrolPoints[patrolIndex].position);
+            }
+        }
+    }
 
-        // patrol uses base `speed`
-        transform.position += transform.forward * speed * Time.deltaTime;
+    void UpdateAnimation()
+    {
+        if (animator == null || string.IsNullOrEmpty(runParamName)) return;
+        animator.SetBool(runParamName, isChasing && !agent.isStopped);
+    }
+
+    void RunStuckCheck()
+    {
+        if (Time.time < lastStuckCheck + stuckCheckInterval) return;
+
+        float moved = (transform.position - lastStuckPos).magnitude;
+        lastStuckCheck = Time.time;
+        lastStuckPos = transform.position;
+
+        // if agent has path, not moving enough and not close to destination, reset path to replan
+        if (agent.hasPath && agent.velocity.sqrMagnitude < stuckVelocityThreshold * stuckVelocityThreshold && agent.remainingDistance > 0.5f)
+        {
+            // quick reset + small pause
+            agent.ResetPath();
+            Invoke(nameof(ResumeAfterStuckReset), stuckResetDelay);
+        }
+    }
+
+    void ResumeAfterStuckReset()
+    {
+        // reassign destination after a short delay
+        if (isChasing && currentTarget != null)
+            agent.SetDestination(currentTarget.position);
+        else if (patrolPoints != null && patrolPoints.Length > 0)
+            agent.SetDestination(patrolPoints[patrolIndex].position);
     }
 }
