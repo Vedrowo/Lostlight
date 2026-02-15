@@ -168,36 +168,38 @@ public class StalkerMove : MonoBehaviour
 
     void DoPatrol()
     {
-        agent.speed = speed;
-        agent.stoppingDistance = 0.2f;
-        agent.autoBraking = false;
-
         if (patrolPoints == null || patrolPoints.Length == 0)
         {
             agent.ResetPath();
             return;
         }
 
+        agent.speed = speed;
+        agent.stoppingDistance = 0.5f;
+        agent.autoBraking = false;
+
+        // If agent has no path, start moving to the current waypoint.
         if (!agent.hasPath)
         {
             agent.SetDestination(patrolPoints[patrolIndex].position);
+            return;
         }
-        else
+
+        // If agent has a path and is not waiting on path calculation, check arrival.
+        if (!agent.pathPending && agent.remainingDistance <= waypointTolerance)
         {
-            float remaining = agent.remainingDistance;
-            if (!agent.pathPending && remaining <= waypointTolerance)
+            // Advance waypoint when we've reached the current one.
+            patrolIndex++;
+            if (patrolIndex >= patrolPoints.Length)
             {
-                // advance waypoint
-                patrolIndex++;
-                if (patrolIndex >= patrolPoints.Length)
-                {
-                    if (patrolLoop) patrolIndex = 0;
-                    else patrolIndex = patrolPoints.Length - 1;
-                }
-                agent.SetDestination(patrolPoints[patrolIndex].position);
+                patrolIndex = patrolLoop ? 0 : patrolPoints.Length - 1;
             }
+
+            // Set destination to the next waypoint.
+            agent.SetDestination(patrolPoints[patrolIndex].position);
         }
     }
+
 
     void UpdateAnimation()
     {

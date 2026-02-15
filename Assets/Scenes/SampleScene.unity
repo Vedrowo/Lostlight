@@ -14,10 +14,10 @@ OcclusionCullingSettings:
 RenderSettings:
   m_ObjectHideFlags: 0
   serializedVersion: 10
-  m_Fog: 0
-  m_FogColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
+  m_Fog: 1
+  m_FogColor: {r: 0.66037726, g: 0.7074213, b: 0.7924528, a: 1}
   m_FogMode: 3
-  m_FogDensity: 0.01
+  m_FogDensity: 0.015
   m_LinearFogStart: 0
   m_LinearFogEnd: 300
   m_AmbientSkyColor: {r: 0.212, g: 0.227, b: 0.259, a: 1}
@@ -429,6 +429,55 @@ Transform:
   m_Children: []
   m_Father: {fileID: 1310492910}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &371416543
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 371416545}
+  - component: {fileID: 371416544}
+  m_Layer: 0
+  m_Name: Mist
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &371416544
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 371416543}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 172515602e62fb746b5d573b38a5fe58, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Unity.RenderPipelines.Core.Runtime::UnityEngine.Rendering.Volume
+  m_IsGlobal: 1
+  priority: 0
+  blendDistance: 0
+  weight: 1
+  sharedProfile: {fileID: 11400000, guid: 857aa79420fadec4ca1123d0cf3eb8f0, type: 2}
+--- !u!4 &371416545
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 371416543}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 19.618895, y: -116.42471, z: 162.4323}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &410087039
 GameObject:
   m_ObjectHideFlags: 0
@@ -586,7 +635,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: '::'
   sun: {fileID: 410087040}
-  timeOfDay: 20
+  timeOfDay: 24
   autoCycle: 0
   hoursPerSecond: 0.1
   sunColorOverDay:
@@ -752,8 +801,8 @@ MonoBehaviour:
     m_PreInfinity: 2
     m_PostInfinity: 2
     m_RotationOrder: 4
-  moonYawOffset: 10
-  cloudCover: 0
+  moonYawOffset: 0
+  cloudCover: 0.175
   enableFog: 1
   fogColorOverDay:
     serializedVersion: 2
@@ -837,7 +886,10 @@ MonoBehaviour:
     m_PostInfinity: 2
     m_RotationOrder: 4
   forestFogMultiplier: 1.6
+  nightFogMultiplier: 2
+  nightFogSmoothness: 1.14
   nightThreshold: 0.25
+  globalVolume: {fileID: 371416544}
   OnDayStart:
     m_PersistentCalls:
       m_Calls: []
@@ -1063,6 +1115,7 @@ MonoBehaviour:
   patrolPoints:
   - {fileID: 1332043441}
   - {fileID: 1971014816}
+  - {fileID: 1204465917}
   patrolLoop: 1
   waypointTolerance: 0.5
   chaseSpeedMultiplier: 1.2
@@ -1136,7 +1189,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 8db6d47b94021ae4a9a2d261f48d7019, type: 3}
       propertyPath: m_LocalPosition.z
-      value: -28.95
+      value: -70.8
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 8db6d47b94021ae4a9a2d261f48d7019, type: 3}
       propertyPath: m_LocalRotation.w
@@ -1424,6 +1477,37 @@ MeshFilter:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1179624513}
   m_Mesh: {fileID: 10208, guid: 0000000000000000e000000000000000, type: 0}
+--- !u!1 &1204465916
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1204465917}
+  m_Layer: 0
+  m_Name: Point3
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1204465917
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1204465916}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: -49.06636, y: 17.6, z: -155.9}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1310492908
 GameObject:
   m_ObjectHideFlags: 0
@@ -1537,7 +1621,7 @@ Transform:
   m_GameObject: {fileID: 1332043440}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 69, y: 17.70586, z: -18.17078}
+  m_LocalPosition: {x: -55, y: 17.70586, z: -18.17078}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -1883,7 +1967,7 @@ GameObject:
   m_Component:
   - component: {fileID: 1971014816}
   m_Layer: 0
-  m_Name: Point1 (1)
+  m_Name: Point2
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -1898,7 +1982,7 @@ Transform:
   m_GameObject: {fileID: 1971014815}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -359, y: 17.70586, z: 5.44}
+  m_LocalPosition: {x: 100.5, y: 41.26, z: -113.8}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -1918,6 +2002,8 @@ SceneRoots:
   - {fileID: 1445823969}
   - {fileID: 1332043441}
   - {fileID: 1971014816}
+  - {fileID: 1204465917}
   - {fileID: 1026423863}
   - {fileID: 825115969}
   - {fileID: 1493110306}
+  - {fileID: 371416545}

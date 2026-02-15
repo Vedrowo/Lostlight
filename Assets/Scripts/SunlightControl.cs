@@ -1,6 +1,7 @@
 using System.Collections;
 using UnityEngine;
 using UnityEngine.Events;
+using UnityEngine.Rendering; // optional, used when driving a Global Volume
 
 [DisallowMultipleComponent]
 public class SunlightControl : MonoBehaviour
@@ -46,10 +47,22 @@ public class SunlightControl : MonoBehaviour
     [Range(0f, 5f)]
     public float forestFogMultiplier = 1.6f;
 
+    [Header("Night fog tuning")]
+    [Tooltip("How much stronger the fog becomes at peak-night compared to the base curve. 1 = no extra night fog.")]
+    [Min(1f)]
+    public float nightFogMultiplier = 2f;
+    [Tooltip("Easing applied to night fog progression (higher = smoother)")]
+    [Range(0f, 4f)]
+    public float nightFogSmoothness = 1f;
+
     [Header("Behavior")]
     [Tooltip("Normalized threshold (0..1 => 0..24 hours) below which it's considered night. Useful for firing night/day events.")]
     [Range(0f, 1f)]
     public float nightThreshold = 0.25f; // 6:00 -> 0.25
+
+    [Header("Optional URP Volume")]
+    [Tooltip("Optional Global Volume (URP) to drive fog/atmosphere at night. Assign a Global Volume with a Fog override.")]
+    public Volume globalVolume;
 
     [Header("Events")]
     public UnityEvent OnDayStart;
@@ -96,6 +109,13 @@ public class SunlightControl : MonoBehaviour
                 }
             }
         }
+
+        if (globalVolume == null)
+        {
+            var vols = FindObjectsOfType<Volume>();
+            foreach (var v in vols)
+                if (v.isGlobal) { globalVolume = v; break; }
+        }
     }
 
     void Start()
@@ -105,6 +125,7 @@ public class SunlightControl : MonoBehaviour
         {
             moon.enabled = true; // we control intensity to zero during day to avoid flicker
         }
+        if (globalVolume != null) globalVolume.weight = 0f;
 
         ApplyTimeImmediate(timeOfDay);
     }
@@ -263,16 +284,52 @@ public class SunlightControl : MonoBehaviour
         moon.enabled = intensity > 0.001f;
     }
 
+    // NEW: compute nightProgress 0..1 that rises from 0 at night-start to 1 at midnight, then falls to 0 at night-end.
+    float ComputeNightProgress(float normalizedHour)
+    {
+        float nt = Mathf.Clamp01(nightThreshold);
+        if (nt <= 0f) return 0f;
+
+        // late-night segment (before midnight)
+        if (normalizedHour >= 1f - nt)
+        {
+            return Mathf.InverseLerp(1f - nt, 1f, normalizedHour);
+        }
+
+        // early-night segment (after midnight)
+        if (normalizedHour <= nt)
+        {
+            return Mathf.InverseLerp(nt, 0f, normalizedHour); // maps 0..nt -> 1..0, so invert below
+        }
+
+        return 0f;
+    }
+
     void UpdateFogAndLighting()
     {
-        // Fog - global RenderSettings fallback (works in Built-in and some URP setups)
+        float n = timeOfDay / 24f;
+        // night progress increases from 0 at night-start to 1 at midnight
+        float rawNightProgress = ComputeNightProgress(n);
+        // apply smoothing curve
+        float nightProgress = Mathf.Pow(Mathf.SmoothStep(0f, 1f, rawNightProgress), Mathf.Max(0.0001f, nightFogSmoothness));
+
+        // base fog from curve
+        float baseDensity = fogDensityOverDay.Evaluate(n);
+        // apply night multiplier gradually as night progresses
+        float density = baseDensity * Mathf.Lerp(1f, nightFogMultiplier, nightProgress);
+        // apply forest multiplier
+        density *= (forestFogActive ? forestFogMultiplier : 1f);
+
+        // build fog color so it doesn't go fully black — blend base gradient with a night tint by nightProgress
+        Color dayFog = fogColorOverDay.Evaluate(n);
+        Color nightTint = new Color(0.08f, 0.09f, 0.12f); // subtle blue-gray at night
+        Color finalFogCol = Color.Lerp(dayFog, nightTint, nightProgress * 0.8f);
+
+        // Built-in fallback
         if (enableFog)
         {
             RenderSettings.fog = true;
-            Color fogCol = fogColorOverDay.Evaluate(timeOfDay / 24f);
-            float baseDensity = fogDensityOverDay.Evaluate(timeOfDay / 24f);
-            float density = baseDensity * (forestFogActive ? forestFogMultiplier : 1f);
-            RenderSettings.fogColor = fogCol;
+            RenderSettings.fogColor = finalFogCol;
             RenderSettings.fogDensity = density;
         }
         else
@@ -280,26 +337,25 @@ public class SunlightControl : MonoBehaviour
             RenderSettings.fog = false;
         }
 
-        // Ambient lighting (basic)
-        // Scale ambient intensity so nights are darker (tweak multiplier as needed).
-        float ambientScale = Mathf.Clamp01(sunIntensityOverDay.Evaluate(timeOfDay / 24f));
+        // URP/Volume optional: drive volume weight by nightProgress (clamped)
+        if (globalVolume != null)
+        {
+            float w = Mathf.Clamp01(nightProgress * (forestFogActive ? forestFogMultiplier : 1f));
+            globalVolume.weight = w;
+        }
+
+        // ambient lighting
+        float ambientScale = Mathf.Clamp01(sunIntensityOverDay.Evaluate(n));
         RenderSettings.ambientIntensity = Mathf.Lerp(0.2f, 1f, ambientScale);
     }
 
     void ApplyTimeImmediateNormalized(float normalized) => ApplyTimeImmediate(normalized * 24f);
 
     // Optional convenience: smooth transition helper
-    public void TransitionToNight(float duration)
-    {
-        // choose a representative "night time" (e.g., 22:00)
-        SetTimeOfDay(22f, duration);
-    }
+    public void TransitionToNight(float duration) => SetTimeOfDay(22f, duration);
 
     // Optional convenience: smooth transition helper
-    public void TransitionToDay(float duration)
-    {
-        SetTimeOfDay(10f, duration);
-    }
+    public void TransitionToDay(float duration) => SetTimeOfDay(10f, duration);
 
     // Debug / Editor helper
 #if UNITY_EDITOR
@@ -358,10 +414,10 @@ public class SunlightControl : MonoBehaviour
         Gradient g = new Gradient();
         g.SetKeys(
             new GradientColorKey[] {
-                new GradientColorKey(new Color(0.02f,0.02f,0.03f), 0f),
+                new GradientColorKey(new Color(0.07f,0.08f,0.09f), 0f),
                 new GradientColorKey(new Color(0.6f,0.6f,0.65f), 0.3f),
                 new GradientColorKey(new Color(0.6f,0.6f,0.65f), 0.7f),
-                new GradientColorKey(new Color(0.02f,0.02f,0.03f), 1f)
+                new GradientColorKey(new Color(0.07f,0.08f,0.09f), 1f)
             },
             new GradientAlphaKey[] { new GradientAlphaKey(1f,0f), new GradientAlphaKey(1f,1f) }
         );
