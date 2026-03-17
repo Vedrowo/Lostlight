@@ -37,9 +37,6 @@
             "m_Id": "9e6c8cfec6b04b2aa593fb4e36de1a76"
         },
         {
-            "m_Id": "b290bd8292c8492eab135077955ecec0"
-        },
-        {
             "m_Id": "ba5cce76154148cc868962d88f0973c5"
         },
         {
@@ -113,6 +110,9 @@
         },
         {
             "m_Id": "73f10e4b5bb140fb8b67a4581cea4e6a"
+        },
+        {
+            "m_Id": "a1c6bb1cecfa4c7ebfd96756764b5ac5"
         }
     ],
     "m_GroupDatas": [],
@@ -457,9 +457,6 @@
                 "m_Id": "9e6c8cfec6b04b2aa593fb4e36de1a76"
             },
             {
-                "m_Id": "b290bd8292c8492eab135077955ecec0"
-            },
-            {
                 "m_Id": "ba5cce76154148cc868962d88f0973c5"
             },
             {
@@ -473,6 +470,9 @@
             },
             {
                 "m_Id": "ced6d8de1c734567a13d215e79e10f11"
+            },
+            {
+                "m_Id": "a1c6bb1cecfa4c7ebfd96756764b5ac5"
             }
         ]
     },
@@ -772,6 +772,22 @@
     "m_CustomColors": {
         "m_SerializableColors": []
     }
+}
+
+{
+    "m_SGVersion": 0,
+    "m_Type": "UnityEditor.ShaderGraph.Vector1MaterialSlot",
+    "m_ObjectId": "1dfd40ba7fbc4d15b1dfbbbeb8667dc7",
+    "m_Id": 0,
+    "m_DisplayName": "Metallic",
+    "m_SlotType": 0,
+    "m_Hidden": false,
+    "m_ShaderOutputName": "Metallic",
+    "m_StageCapability": 2,
+    "m_Value": 0.0,
+    "m_DefaultValue": 0.0,
+    "m_Labels": [],
+    "m_LiteralMode": false
 }
 
 {
@@ -2180,22 +2196,6 @@
 
 {
     "m_SGVersion": 0,
-    "m_Type": "UnityEditor.ShaderGraph.Vector1MaterialSlot",
-    "m_ObjectId": "94f1cd55aa8b4e828eeae837f4913a10",
-    "m_Id": 0,
-    "m_DisplayName": "Metallic",
-    "m_SlotType": 0,
-    "m_Hidden": false,
-    "m_ShaderOutputName": "Metallic",
-    "m_StageCapability": 2,
-    "m_Value": 0.0,
-    "m_DefaultValue": 0.0,
-    "m_Labels": [],
-    "m_LiteralMode": false
-}
-
-{
-    "m_SGVersion": 0,
     "m_Type": "UnityEditor.ShaderGraph.DynamicValueMaterialSlot",
     "m_ObjectId": "96e3d0783e754dff8d5a20d949ad8208",
     "m_Id": 0,
@@ -2460,6 +2460,40 @@
 
 {
     "m_SGVersion": 0,
+    "m_Type": "UnityEditor.ShaderGraph.BlockNode",
+    "m_ObjectId": "a1c6bb1cecfa4c7ebfd96756764b5ac5",
+    "m_Group": {
+        "m_Id": ""
+    },
+    "m_Name": "SurfaceDescription.Metallic",
+    "m_DrawState": {
+        "m_Expanded": true,
+        "m_Position": {
+            "serializedVersion": "2",
+            "x": 0.0,
+            "y": 0.0,
+            "width": 0.0,
+            "height": 0.0
+        }
+    },
+    "m_Slots": [
+        {
+            "m_Id": "1dfd40ba7fbc4d15b1dfbbbeb8667dc7"
+        }
+    ],
+    "synonyms": [],
+    "m_Precision": 0,
+    "m_PreviewExpanded": true,
+    "m_DismissedVersion": 0,
+    "m_PreviewMode": 0,
+    "m_CustomColors": {
+        "m_SerializableColors": []
+    },
+    "m_SerializedDescriptor": "SurfaceDescription.Metallic"
+}
+
+{
+    "m_SGVersion": 0,
     "m_Type": "UnityEditor.ShaderGraph.DynamicVectorMaterialSlot",
     "m_ObjectId": "a497676dfb1c43af9a1c3b0c9a65433c",
     "m_Id": 1,
@@ -2609,40 +2643,6 @@
     "m_DefaultValue": 0.0,
     "m_Labels": [],
     "m_LiteralMode": false
-}
-
-{
-    "m_SGVersion": 0,
-    "m_Type": "UnityEditor.ShaderGraph.BlockNode",
-    "m_ObjectId": "b290bd8292c8492eab135077955ecec0",
-    "m_Group": {
-        "m_Id": ""
-    },
-    "m_Name": "SurfaceDescription.Metallic",
-    "m_DrawState": {
-        "m_Expanded": true,
-        "m_Position": {
-            "serializedVersion": "2",
-            "x": 0.0,
-            "y": 0.0,
-            "width": 0.0,
-            "height": 0.0
-        }
-    },
-    "m_Slots": [
-        {
-            "m_Id": "94f1cd55aa8b4e828eeae837f4913a10"
-        }
-    ],
-    "synonyms": [],
-    "m_Precision": 0,
-    "m_PreviewExpanded": true,
-    "m_DismissedVersion": 0,
-    "m_PreviewMode": 0,
-    "m_CustomColors": {
-        "m_SerializableColors": []
-    },
-    "m_SerializedDescriptor": "SurfaceDescription.Metallic"
 }
 
 {
@@ -2843,7 +2843,7 @@
     "m_SurfaceType": 0,
     "m_ZTestMode": 4,
     "m_ZWriteControl": 0,
-    "m_AlphaMode": 0,
+    "m_AlphaMode": 1,
     "m_RenderFace": 0,
     "m_AlphaClip": true,
     "m_CastShadows": true,
