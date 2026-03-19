@@ -186,7 +186,7 @@ public class SunlightControl : MonoBehaviour
         // We bypass 'nightFactor' and let your curve (moonIntensityOverNight) do all the work.
         // I added a * 5f multiplier so it's actually bright enough to see.
         float moonCurveT = Mathf.Repeat(n + 0.5f, 1f);
-        float intensity = moonIntensityOverNight.Evaluate(moonCurveT);
+        float intensity = moonIntensityOverNight.Evaluate(moonCurveT) * 0.3f;
 
         // 3. COLOR
         moon.color = moonColorOverNight.Evaluate(n);
@@ -217,47 +217,47 @@ public class SunlightControl : MonoBehaviour
     void UpdateFogAndLighting()
     {
         float n = timeOfDay / 24f;
-        // night progress increases from 0 at night-start to 1 at midnight
         float rawNightProgress = ComputeNightProgress(n);
-        // apply smoothing curve
         float nightProgress = Mathf.Pow(Mathf.SmoothStep(0f, 1f, rawNightProgress), Mathf.Max(0.0001f, nightFogSmoothness));
 
-        // base fog from curve
-        float baseDensity = fogDensityOverDay.Evaluate(n);
-        // apply night multiplier gradually as night progresses
-        float density = baseDensity * Mathf.Lerp(1f, nightFogMultiplier, nightProgress);
+        float sunScale = sunIntensityOverDay.Evaluate(n);
+        float moonScale = nightProgress;
 
-        // build fog color so it doesn't go fully black — blend base gradient with a night tint by nightProgress
+        // --- 1. CLEAN FOG ---
         Color dayFog = fogColorOverDay.Evaluate(n);
-        Color nightTint = new Color(0.08f, 0.09f, 0.12f); // subtle blue-gray at night
-        Color finalFogCol = Color.Lerp(dayFog, nightTint, nightProgress * 0.8f);
+        Color nightFog = new Color(0.03f, 0.04f, 0.07f); // Darker, cleaner night blue
+        RenderSettings.fogColor = Color.Lerp(dayFog, nightFog, nightProgress);
+        RenderSettings.fogDensity = fogDensityOverDay.Evaluate(n) * Mathf.Lerp(1f, nightFogMultiplier, nightProgress);
 
-        // Built-in fallback
-        if (enableFog)
+        // --- 2. AMBIENT (VISIBLE NIGHT) ---
+        float ambientFloor = 0.15f; // Slightly lower floor for better contrast
+        RenderSettings.ambientIntensity = Mathf.Lerp(ambientFloor, 1f, sunScale > 0.1f ? sunScale : moonScale * 0.35f);
+
+        // --- 3. THE SKYBOX (ABSOLUTE BLACK NIGHT) ---
+        if (RenderSettings.skybox != null)
         {
-            RenderSettings.fog = true;
-            RenderSettings.fogColor = finalFogCol;
-            RenderSettings.fogDensity = density;
+            if (sunScale > 0.05f)
+            {
+                // Day: Default values
+                RenderSettings.skybox.SetFloat("_Exposure", 1.0f);
+                RenderSettings.skybox.SetFloat("_AtmosphericThickness", 1.0f);
+                if (RenderSettings.skybox.HasProperty("_SkyTint"))
+                    RenderSettings.skybox.SetColor("_SkyTint", new Color(0.5f, 0.5f, 0.5f));
+            }
+            else
+            {
+                // Night: Absolute Zero
+                // We set Exposure to 0 AND Tint to Black to ensure no light bleeds out
+                RenderSettings.skybox.SetFloat("_Exposure", 0f);
+                RenderSettings.skybox.SetFloat("_AtmosphericThickness", 0f);
+
+                if (RenderSettings.skybox.HasProperty("_SkyTint"))
+                    RenderSettings.skybox.SetColor("_SkyTint", Color.black);
+            }
         }
-        else
-        {
-            RenderSettings.fog = false;
-        }
 
-        // ambient lighting
-        float ambientScale = Mathf.Clamp01(sunIntensityOverDay.Evaluate(n));
-        RenderSettings.ambientIntensity = Mathf.Lerp(0.2f, 1f, ambientScale);
-
-        // 1. Calculate a smooth exposure value (1.0 at day, 0.015 at peak night)
-        float targetExposure = Mathf.Lerp(1.0f, 0.015f, nightProgress);
-        float targetThickness = Mathf.Lerp(1.0f, 0.6f, nightProgress);
-
-        // 2. Apply these EVERY frame (not just inside the IF)
-        RenderSettings.skybox.SetFloat("_Exposure", targetExposure);
-        RenderSettings.skybox.SetFloat("_AtmosphericThickness", targetThickness);
-
-        // 3. The Swap (Keep the threshold at 0.4 or 0.5)
-        if (nightProgress > 0.4f)
+        // --- 4. THE SWAP ---
+        if (nightProgress > 0.5f)
         {
             if (RenderSettings.sun != moon)
             {

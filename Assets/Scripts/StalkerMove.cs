@@ -28,6 +28,11 @@ public class StalkerMove : MonoBehaviour
     public Animator animator;
     public string runParamName = "isRunning";
     public string attackTriggerName = "Attack";
+    public string attackBoolName = "isAttacking";
+
+    [Header("Damage")]
+    [Tooltip("If true, the stalker will attempt to 'kill' the player by calling Die() on a PlayerHealth component when it lands an attack.")]
+    public bool killOnAttack = true;
 
     [Header("Stuck recovery")]
     public float stuckVelocityThreshold = 0.05f;
@@ -150,8 +155,18 @@ public class StalkerMove : MonoBehaviour
         {
             // stop and attack (agent will keep orientation by default)
             agent.isStopped = true;
-            if (animator != null && !string.IsNullOrEmpty(attackTriggerName))
-                animator.SetTrigger(attackTriggerName);
+            if (animator != null)
+            {
+                if (!string.IsNullOrEmpty(attackTriggerName))
+                    animator.SetTrigger(attackTriggerName);
+                if (!string.IsNullOrEmpty(attackBoolName))
+                    animator.SetBool(attackBoolName, true);
+            }
+
+            // apply damage / kill
+            if (killOnAttack)
+                TryKillTarget(currentTarget);
+
             lastAttackTime = Time.time;
             Invoke(nameof(ResumeAgentAfterAttack), attackCooldown);
         }
@@ -161,9 +176,33 @@ public class StalkerMove : MonoBehaviour
         }
     }
 
+    void TryKillTarget(Transform target)
+    {
+        if (target == null) return;
+
+        // try to find PlayerHealth on the target or its root
+        var ph = target.GetComponent<PlayerHealth>() ?? target.GetComponentInChildren<PlayerHealth>() ?? target.root.GetComponent<PlayerHealth>();
+        if (ph != null)
+        {
+            ph.Die();
+            return;
+        }
+
+        // fallback: if this is a generic GameObject with a Rigidbody, try to simulate a force or disable it
+        var rb = target.GetComponent<Rigidbody>() ?? target.GetComponentInChildren<Rigidbody>();
+        if (rb != null)
+        {
+            // disable movement by making kinematic and/or destroying common movement scripts
+            rb.isKinematic = false;
+            rb.AddForce((target.position - transform.position).normalized * 2f, ForceMode.Impulse);
+        }
+    }
+
     void ResumeAgentAfterAttack()
     {
         if (agent != null) agent.isStopped = false;
+        if (animator != null && !string.IsNullOrEmpty(attackBoolName))
+            animator.SetBool(attackBoolName, false);
     }
 
     void DoPatrol()
