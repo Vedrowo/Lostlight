@@ -95,6 +95,19 @@ public class PlayerMovement : MonoBehaviour
 
     void Update()
     {
+        // Prevent player input and player-driven movement when the game is not in a playable movement state
+        if (GameManager.Instance != null &&
+            GameManager.Instance.currentState != GameState.Exploration &&
+            GameManager.Instance.currentState != GameState.EscapeSequence)
+        {
+            // Clear input-related flags so player does not apply forces while another system (dragging/catching/etc.) moves them.
+            horizontalInput = 0f;
+            verticalInput = 0f;
+            isSprinting = false;
+            // keep physics and external movement intact (do not zero velocities) and skip player processing
+            return;
+        }
+
         float effectivePlayerHeight = playerHeight * (isCrouching ? crouchHeightMultiplier : 1f);
         grounded = Physics.Raycast(transform.position, Vector3.down, effectivePlayerHeight * 0.5f + 0.2f, whatIsGround);
         MyInput();
@@ -119,6 +132,14 @@ public class PlayerMovement : MonoBehaviour
 
     private void FixedUpdate()
     {
+        // Prevent applying player-controlled forces when game state disallows player movement.
+        if (GameManager.Instance != null &&
+            GameManager.Instance.currentState != GameState.Exploration &&
+            GameManager.Instance.currentState != GameState.EscapeSequence)
+        {
+            return;
+        }
+
         MovePlayer();
         ApplyStopDamping();
     }
@@ -128,7 +149,7 @@ public class PlayerMovement : MonoBehaviour
         horizontalInput = Input.GetAxisRaw("Horizontal");
         verticalInput = Input.GetAxisRaw("Vertical");
 
-        // crouch is hold-to-crouch
+        // crouch is hold-to-crouch — movement is allowed while crouching, but speed and noise are reduced
         isCrouching = Input.GetKey(crouchKey);
 
         // decide sprinting only if forward input and key pressed and stamina allows it and not crouching
@@ -137,9 +158,10 @@ public class PlayerMovement : MonoBehaviour
 
         // base move speed (sprinting overrides)
         float baseSpeed = isSprinting ? moveSpeed * sprintMultiplier : moveSpeed;
-        // apply crouch multiplier if crouching
+        // apply crouch multiplier if crouching (movement still allowed)
         currentMoveSpeed = isCrouching ? baseSpeed * crouchSpeedMultiplier : baseSpeed;
 
+        // jumping is disabled while crouching
         if (Input.GetKey(jumpKey) && readyToJump && grounded && !isCrouching)
         {
             readyToJump = false;
@@ -187,7 +209,7 @@ public class PlayerMovement : MonoBehaviour
     private void Jump()
     {
         rb.linearVelocity = new Vector3(rb.linearVelocity.x, 0f, rb.linearVelocity.z);
-        rb.AddForce(transform.up * jumpForce, ForceMode.Impulse);
+        rb.AddForce(Vector3.up * jumpForce, ForceMode.Impulse);
     }
 
     private void ResetJump()

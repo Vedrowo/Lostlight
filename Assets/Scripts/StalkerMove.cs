@@ -522,11 +522,20 @@ public class StalkerMove : MonoBehaviour
                 agent.Move(move);
             }
 
+            // immediate-hit check while locked: if close enough, apply kill immediately
+            float nowDist = Vector3.Distance(transform.position, target.position);
+            if (nowDist <= attackStartRange)
+            {
+                if (killOnAttack)
+                    TryKillTarget(target);
+                break;
+            }
+
             timer += Time.deltaTime;
             yield return null;
         }
 
-        // FINAL HIT (VERY forgiving)
+        // FINAL HIT (VERY forgiving) - fallback if the immediate check didn't kill
         float finalDist = Vector3.Distance(transform.position, target.position);
 
         if (finalDist <= attackRangeBuffered + 0.5f)
@@ -544,15 +553,73 @@ public class StalkerMove : MonoBehaviour
     void TryKillTarget(Transform target)
     {
         if (target == null) return;
+        if (GameManager.Instance.GetState() != GameState.Exploration &&
+        GameManager.Instance.GetState() != GameState.EscapeSequence)
+            return; // don't kill player outside normal gameplay
 
         var ph = target.GetComponent<PlayerHealth>() ??
                  target.GetComponentInChildren<PlayerHealth>() ??
                  target.root.GetComponent<PlayerHealth>();
 
-        if (ph != null)
+        if (ph == null) return;
+
+        // FIRST TIME capture
+        if (!GameManager.Instance.hasBeenCaught)
         {
-            ph.Die();
+            GameManager.Instance.hasBeenCaught = true;
+            GameManager.Instance.SetState(GameState.Caught);
+
+            // Start the capture cinematic / sequence that performs hit, blackout, staged dragging and transition to EscapeSequence.
+            CaptureSequence.Trigger(target, transform);
+            return;
         }
+        Debug.Log("[Stalker] Attempting to kill player...");
+        // AFTER THAT normal death
+        ph.Die();
+        Debug.Log("[Stalker] Player.Die() called successfully.");
+    }
+
+    // Public helper to teleport the stalker to a new position and reset it to normal patrol state.
+    // Use NavMeshAgent.Warp so NavMesh stays consistent.
+    public void ReturnToPatrol(Vector3 worldPosition)
+    {
+        if (agent != null)
+        {
+            // warp to destination so navmesh doesn't try to path-find through the teleport gap
+            agent.Warp(worldPosition);
+            agent.ResetPath();
+            agent.isStopped = false;
+        }
+        else
+        {
+            transform.position = worldPosition;
+        }
+
+        // reset dynamic patrol selection so it will pick appropriate nearby point next Update
+        currentDynamicPatrolIndex = -1;
+
+        // make sure the stalker resumes normal patrol/chase logic immediately
+        activated = true;
+        isChasing = false;
+        isSearching = false;
+        currentTarget = null;
+        hasBeenSeenByPlayer = false;
+        lastPlayerCanSee = false;
+        playerSeeTimer = 0f;
+        playerLookAwayTimer = 0f;
+        // In ReturnToPatrol or after the escape sequence, make sure killOnAttack = true
+        killOnAttack = true;
+
+        // clear animator attack state
+        if (animator != null)
+        {
+            animator.SetBool(attackBoolName, false);
+            // do not forcibly clear triggeredBoolName if you want the stalker to keep its "triggered" personality;
+            // if you'd prefer it to return to idle animation, uncomment the next line:
+            // if (!string.IsNullOrEmpty(triggeredBoolName)) animator.SetBool(triggeredBoolName, false);
+        }
+
+        Debug.Log($"Stalker '{gameObject.name}' returned to patrol at {worldPosition}");
     }
 
     // Patrolling around player's vicinity: select dynamic subset of patrolPoints within patrolRadiusAroundPlayer
