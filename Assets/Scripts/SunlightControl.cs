@@ -1,7 +1,6 @@
 using System.Collections;
 using UnityEngine;
 using UnityEngine.Rendering;
-using UnityEngine.Rendering.Universal;
 
 [DisallowMultipleComponent]
 public class SunlightControl : MonoBehaviour
@@ -10,10 +9,8 @@ public class SunlightControl : MonoBehaviour
     [Tooltip("Directional light used as the sun. If null the first directional Light found will be used.")]
     public Light sun;
 
-    [Tooltip("Directional light used as the moon. If null an opposite-directional light will be used if available.")]
+    [Tooltip("Directional light used as the moon. If null a second directional light in the scene will be used.")]
     public Light moon;
-
-    public Volume globalVolume;
 
     [Header("Time")]
     [Tooltip("Time of day in hours (0 - 24). 0 = midnight, 12 = noon.")]
@@ -25,7 +22,7 @@ public class SunlightControl : MonoBehaviour
     [Tooltip("How many in-game hours pass per real second while autoCycle is enabled.")]
     public float hoursPerSecond = 0.1f;
 
-    [Header("Sun appearance (simple)")]
+    [Header("Sun appearance")]
     public Gradient sunColorOverDay = DefaultSunGradient();
     public AnimationCurve sunIntensityOverDay = DefaultIntensityCurve();
 
@@ -45,52 +42,53 @@ public class SunlightControl : MonoBehaviour
     [Range(0f, 4f)]
     public float nightFogSmoothness = 1f;
 
+    [Header("Skybox tuning")]
+    [Tooltip("Sun scale value below which the day skybox starts fading out.")]
+    [Range(0.05f, 0.5f)]
+    public float skyboxDayThreshold = 0.2f;
+    [Tooltip("Sun scale value below which the night skybox is fully applied.")]
+    [Range(0.01f, 0.2f)]
+    public float skyboxNightThreshold = 0.05f;
+    [Tooltip("Minimum skybox exposure at night (gives a faint moonlit glow, 0 = pure black).")]
+    [Range(0f, 0.15f)]
+    public float nightSkyExposure = 0.04f;
+    [Tooltip("Minimum atmospheric thickness at night.")]
+    [Range(0f, 0.3f)]
+    public float nightAtmosphericThickness = 0.05f;
+
     [Header("Behavior")]
     [Range(0f, 1f)]
     [Tooltip("Normalized threshold (0..1 => 0..24 hours) below which it's considered night.")]
     public float nightThreshold = 0.25f; // 6:00 -> 0.25
 
-    // internal
-    Coroutine runningTransition;
+    // Internal
+    Coroutine _runningTransition;
+    bool _sunIsActive = true;
+    float _lastSkyExposure = -1f;
+
+    // -------------------------------------------------------------------------
+    // Unity lifecycle
+    // -------------------------------------------------------------------------
 
     void Awake()
     {
-        if (sun == null)
-        {
-            // find the first enabled directional light
-            var lights = FindObjectsOfType<Light>();
-            foreach (var l in lights)
-            {
-                if (l.type == LightType.Directional)
-                {
-                    sun = l;
-                    break;
-                }
-            }
-        }
-
-        // If no moon assigned try to find a second directional; otherwise leave null and user can assign one.
-        if (moon == null)
+        // Single pass: find sun (first directional) and moon (second directional).
+        if (sun == null || moon == null)
         {
             var lights = FindObjectsOfType<Light>();
             foreach (var l in lights)
             {
-                if (l.type == LightType.Directional && l != sun)
-                {
-                    moon = l;
-                    break;
-                }
+                if (l.type != LightType.Directional) continue;
+                if (sun == null) { sun = l; continue; }
+                if (moon == null) { moon = l; break; }
             }
         }
     }
 
     void Start()
     {
-        // ensure moon is initially configured as weaker / off if needed
         if (moon != null)
-        {
-            moon.enabled = true; // we control intensity to zero during day to avoid flicker
-        }
+            moon.enabled = true; // intensity controlled to zero during day
 
         ApplyTimeImmediate(timeOfDay);
     }
@@ -98,31 +96,33 @@ public class SunlightControl : MonoBehaviour
     void Update()
     {
         if (autoCycle)
-        {
             ShiftTime(Time.deltaTime * hoursPerSecond);
-        }
     }
 
-    // PUBLIC API
+    // -------------------------------------------------------------------------
+    // Public API
+    // -------------------------------------------------------------------------
 
-    // Set absolute time in hours (0..24). If smoothDuration>0 will transition smoothly.
+    /// <summary>Set absolute time in hours (0..24). Pass smoothDuration > 0 for a smooth transition.</summary>
     public void SetTimeOfDay(float hours, float smoothDuration = 0f)
     {
         hours = NormalizeHours(hours);
-        if (runningTransition != null) StopCoroutine(runningTransition);
+        if (_runningTransition != null) StopCoroutine(_runningTransition);
         if (smoothDuration > 0f)
-            runningTransition = StartCoroutine(TransitionTimeCoroutine(timeOfDay, hours, smoothDuration));
+            _runningTransition = StartCoroutine(TransitionTimeCoroutine(timeOfDay, hours, smoothDuration));
         else
             ApplyTimeImmediate(hours);
     }
 
-    // Add delta hours to current time
+    /// <summary>Add delta hours to the current time.</summary>
     public void ShiftTime(float deltaHours, float smoothDuration = 0f)
     {
         SetTimeOfDay(timeOfDay + deltaHours, smoothDuration);
     }
 
-    // INTERNAL / HELPERS
+    // -------------------------------------------------------------------------
+    // Internal helpers
+    // -------------------------------------------------------------------------
 
     static float NormalizeHours(float h)
     {
@@ -134,207 +134,213 @@ public class SunlightControl : MonoBehaviour
     IEnumerator TransitionTimeCoroutine(float fromHours, float toHours, float duration)
     {
         float elapsed = 0f;
-        // handle wrap around: choose shortest delta
+        // Shortest delta via angle wrap
         float delta = Mathf.DeltaAngle(fromHours / 24f * 360f, toHours / 24f * 360f) / 360f * 24f;
         while (elapsed < duration)
         {
             elapsed += Time.deltaTime;
             float t = Mathf.Clamp01(elapsed / duration);
-            float current = fromHours + delta * t;
-            ApplyTimeImmediate(NormalizeHours(current));
+            ApplyTimeImmediate(NormalizeHours(fromHours + delta * t));
             yield return null;
         }
         ApplyTimeImmediate(toHours);
-        runningTransition = null;
+        _runningTransition = null;
     }
 
     void ApplyTimeImmediate(float hours)
     {
         timeOfDay = NormalizeHours(hours);
 
-        // rotate sun: convert hours (0..24) to inclination (-90..270) so 12:00 = 90deg (overhead)
-        // Using: angle = (time/24)*360 - 90
-        float sunAngle = (timeOfDay / 24f) * 360f - 90f;
+        float n = timeOfDay / 24f;
+
+        // --- Sun ---
+        // angle: 0h = -90 (below horizon), 12h = +90 (overhead)
+        float sunAngle = n * 360f - 90f;
         if (sun != null)
         {
-            sun.transform.rotation = Quaternion.Euler(new Vector3(sunAngle, 45f, 0f)); // tweak yaw for direction
-            // color & intensity
-            Color sunColor = sunColorOverDay.Evaluate(timeOfDay / 24f);
-            sun.color = sunColor;
-            float intensity = sunIntensityOverDay.Evaluate(timeOfDay / 24f);
-            sun.intensity = intensity;
+            sun.transform.rotation = Quaternion.Euler(sunAngle, 45f, 0f);
+            sun.color = sunColorOverDay.Evaluate(n);
+            sun.intensity = sunIntensityOverDay.Evaluate(n);
         }
 
-        // Moon: place roughly opposite the sun and set low-intensity glow at night, reduced by clouds
-        ApplyMoon(timeOfDay);
+        // --- Moon ---
+        ApplyMoon(n);
 
-        UpdateFogAndLighting();
+        // --- Environment ---
+        UpdateFogAndLighting(n);
     }
 
-    void ApplyMoon(float hours)
+    void ApplyMoon(float n)
     {
         if (moon == null) return;
 
-        float n = hours / 24f;
+        // Moon is roughly opposite the sun (+90 so midnight = overhead)
+        float moonAngle = n * 360f + 90f;
+        moon.transform.rotation = Quaternion.Euler(moonAngle, 45f + moonYawOffset, 0f);
 
-        // 1. FIXED ROTATION: 
-        // We use +90 so at midnight (0/24) the moon is roughly overhead.
-        float moonAngle = (n * 360f) + 90f;
-        moon.transform.rotation = Quaternion.Euler(new Vector3(moonAngle, 45f + moonYawOffset, 0f));
-
-        // 2. FIXED INTENSITY:
-        // We bypass 'nightFactor' and let your curve (moonIntensityOverNight) do all the work.
-        // I added a * 5f multiplier so it's actually bright enough to see.
+        // Remap so moonCurveT = 0.5 at midnight regardless of wall-clock wrap
         float moonCurveT = Mathf.Repeat(n + 0.5f, 1f);
-        float intensity = moonIntensityOverNight.Evaluate(moonCurveT) * 0.3f;
-
-        // 3. COLOR
+        moon.intensity = moonIntensityOverNight.Evaluate(moonCurveT) * 0.5f;
         moon.color = moonColorOverNight.Evaluate(n);
-        moon.intensity = intensity;
     }
 
-    // NEW: compute nightProgress 0..1 that rises from 0 at night-start to 1 at midnight, then falls to 0 at night-end.
-    float ComputeNightProgress(float normalizedHour)
+    // Returns a bell-shaped 0..1 value: 0 during day, rising to 1 at midnight.
+    float ComputeNightProgress(float n)
     {
         float nt = Mathf.Clamp01(nightThreshold);
         if (nt <= 0f) return 0f;
 
-        // late-night segment (before midnight)
-        if (normalizedHour >= 1f - nt)
-        {
-            return Mathf.InverseLerp(1f - nt, 1f, normalizedHour);
-        }
+        // Late-night segment (approaching midnight from the evening side)
+        if (n >= 1f - nt)
+            return Mathf.InverseLerp(1f - nt, 1f, n);
 
-        // early-night segment (after midnight)
-        if (normalizedHour <= nt)
-        {
-            return Mathf.InverseLerp(nt, 0f, normalizedHour); // maps 0..nt -> 1..0, so invert below
-        }
+        // Early-night segment (retreating from midnight toward morning)
+        if (n <= nt)
+            // InverseLerp(nt, 0, n): at n=0 returns 1, at n=nt returns 0 — correct bell shape
+            return Mathf.InverseLerp(nt, 0f, n);
 
         return 0f;
     }
 
-    void UpdateFogAndLighting()
+    void UpdateFogAndLighting(float n)
     {
-        float n = timeOfDay / 24f;
         float rawNightProgress = ComputeNightProgress(n);
-        float nightProgress = Mathf.Pow(Mathf.SmoothStep(0f, 1f, rawNightProgress), Mathf.Max(0.0001f, nightFogSmoothness));
+        float nightProgress = Mathf.Pow(
+            Mathf.SmoothStep(0f, 1f, rawNightProgress),
+            Mathf.Max(0.0001f, nightFogSmoothness)
+        );
 
         float sunScale = sunIntensityOverDay.Evaluate(n);
         float moonScale = nightProgress;
 
-        // --- 1. CLEAN FOG ---
-        Color dayFog = fogColorOverDay.Evaluate(n);
-        Color nightFog = new Color(0.03f, 0.04f, 0.07f); // Darker, cleaner night blue
-        RenderSettings.fogColor = Color.Lerp(dayFog, nightFog, nightProgress);
-        RenderSettings.fogDensity = fogDensityOverDay.Evaluate(n) * Mathf.Lerp(1f, nightFogMultiplier, nightProgress);
+        // --- 1. Fog ---
+        if (enableFog)
+        {
+            Color dayFog = fogColorOverDay.Evaluate(n);
+            Color nightFog = new Color(0.03f, 0.04f, 0.07f);
+            RenderSettings.fogColor = Color.Lerp(dayFog, nightFog, nightProgress);
+            RenderSettings.fogDensity = fogDensityOverDay.Evaluate(n)
+                                        * Mathf.Lerp(1f, nightFogMultiplier, nightProgress);
+        }
 
-        // --- 2. AMBIENT (VISIBLE NIGHT) ---
-        float ambientFloor = 0.15f; // Slightly lower floor for better contrast
-        RenderSettings.ambientIntensity = Mathf.Lerp(ambientFloor, 1f, sunScale > 0.1f ? sunScale : moonScale * 0.35f);
+        // --- 2. Ambient ---
+        float ambientFloor = 0.15f;
+        RenderSettings.ambientIntensity = Mathf.Lerp(
+            ambientFloor, 1f,
+            sunScale > 0.1f ? sunScale : moonScale * 0.35f
+        );
 
-        // --- 3. THE SKYBOX (ABSOLUTE BLACK NIGHT) ---
+        // --- 3. Skybox ---
+        // Smoothly lerp exposure between full day and a faint night glow.
+        // skyboxDayThreshold  -> full day exposure (1.0)
+        // skyboxNightThreshold -> night exposure (nightSkyExposure)
         if (RenderSettings.skybox != null)
         {
-            if (sunScale > 0.05f)
-            {
-                // Day: Default values
-                RenderSettings.skybox.SetFloat("_Exposure", 1.0f);
-                RenderSettings.skybox.SetFloat("_AtmosphericThickness", 1.0f);
-                if (RenderSettings.skybox.HasProperty("_SkyTint"))
-                    RenderSettings.skybox.SetColor("_SkyTint", new Color(0.5f, 0.5f, 0.5f));
-            }
-            else
-            {
-                // Night: Absolute Zero
-                // We set Exposure to 0 AND Tint to Black to ensure no light bleeds out
-                RenderSettings.skybox.SetFloat("_Exposure", 0f);
-                RenderSettings.skybox.SetFloat("_AtmosphericThickness", 0f);
+            float skyT = Mathf.InverseLerp(skyboxNightThreshold, skyboxDayThreshold, sunScale);
+            float skyExp = Mathf.Lerp(nightSkyExposure, 1.5f, skyT);
+            float skyAtmo = Mathf.Lerp(nightAtmosphericThickness, 1f, skyT);
 
-                if (RenderSettings.skybox.HasProperty("_SkyTint"))
-                    RenderSettings.skybox.SetColor("_SkyTint", Color.black);
+            // Only write material properties when they change meaningfully (avoid per-frame material dirtying)
+            if (Mathf.Abs(skyExp - _lastSkyExposure) > 0.001f)
+            {
+                RenderSettings.skybox.SetFloat("_Exposure", skyExp);
+                RenderSettings.skybox.SetFloat("_AtmosphericThickness", skyAtmo);
+
+                _lastSkyExposure = skyExp;
             }
         }
 
-        // --- 4. THE SWAP ---
-        if (nightProgress > 0.5f)
+        // --- 4. Primary sun swap (fires only once per transition) ---
+        bool wantSun = nightProgress <= 0.5f;
+        if (wantSun != _sunIsActive)
         {
-            if (RenderSettings.sun != moon)
-            {
-                RenderSettings.sun = moon;
-                DynamicGI.UpdateEnvironment();
-            }
-        }
-        else
-        {
-            if (RenderSettings.sun != sun)
-            {
-                RenderSettings.sun = sun;
-                DynamicGI.UpdateEnvironment();
-            }
+            _sunIsActive = wantSun;
+            RenderSettings.sun = wantSun ? sun : moon;
+            DynamicGI.UpdateEnvironment();
         }
     }
 
-    // Defaults
+    // -------------------------------------------------------------------------
+    // Default curves / gradients
+    // -------------------------------------------------------------------------
+
     static Gradient DefaultSunGradient()
     {
         Gradient g = new Gradient();
         g.SetKeys(
-            new GradientColorKey[] {
-                new GradientColorKey(new Color(0.05f,0.05f,0.12f), 0f),
-                new GradientColorKey(new Color(1f,0.5f,0.2f), 0.2f),
-                new GradientColorKey(new Color(1f,1f,0.95f), 0.5f),
-                new GradientColorKey(new Color(1f,0.5f,0.2f), 0.8f),
-                new GradientColorKey(new Color(0.05f,0.05f,0.12f), 1f)
+            new GradientColorKey[]
+            {
+                new GradientColorKey(new Color(0.05f, 0.05f, 0.12f), 0f),
+                new GradientColorKey(new Color(1f,    0.5f,  0.2f),  0.2f),
+                new GradientColorKey(new Color(1f,    1f,    0.95f), 0.5f),
+                new GradientColorKey(new Color(1f,    0.5f,  0.2f),  0.8f),
+                new GradientColorKey(new Color(0.05f, 0.05f, 0.12f), 1f)
             },
-            new GradientAlphaKey[] { new GradientAlphaKey(1f,0f), new GradientAlphaKey(1f,1f) }
+            new GradientAlphaKey[] { new GradientAlphaKey(1f, 0f), new GradientAlphaKey(1f, 1f) }
         );
         return g;
     }
 
     static AnimationCurve DefaultIntensityCurve()
     {
-        // normalized 0..1 -> intensity multiplier
-        return new AnimationCurve(new Keyframe(0f, 0.05f), new Keyframe(0.2f, 0.6f), new Keyframe(0.5f, 1f), new Keyframe(0.8f, 0.6f), new Keyframe(1f, 0.05f));
+        return new AnimationCurve(
+            new Keyframe(0f, 0.05f),
+            new Keyframe(0.2f, 0.6f),
+            new Keyframe(0.5f, 1f),
+            new Keyframe(0.8f, 0.6f),
+            new Keyframe(1f, 0.05f)
+        );
     }
 
     static Gradient DefaultFogGradient()
     {
         Gradient g = new Gradient();
         g.SetKeys(
-            new GradientColorKey[] {
-                new GradientColorKey(new Color(0.07f,0.08f,0.09f), 0f),
-                new GradientColorKey(new Color(0.6f,0.6f,0.65f), 0.3f),
-                new GradientColorKey(new Color(0.6f,0.6f,0.65f), 0.7f),
-                new GradientColorKey(new Color(0.07f,0.08f,0.09f), 1f)
+            new GradientColorKey[]
+            {
+                new GradientColorKey(new Color(0.07f, 0.08f, 0.09f), 0f),
+                new GradientColorKey(new Color(0.6f,  0.6f,  0.65f), 0.3f),
+                new GradientColorKey(new Color(0.6f,  0.6f,  0.65f), 0.7f),
+                new GradientColorKey(new Color(0.07f, 0.08f, 0.09f), 1f)
             },
-            new GradientAlphaKey[] { new GradientAlphaKey(1f,0f), new GradientAlphaKey(1f,1f) }
+            new GradientAlphaKey[] { new GradientAlphaKey(1f, 0f), new GradientAlphaKey(1f, 1f) }
         );
         return g;
     }
 
     static AnimationCurve DefaultFogDensityCurve()
     {
-        // low during day, higher at dawn/dusk and night
-        return new AnimationCurve(new Keyframe(0f, 0.002f), new Keyframe(0.2f, 0.01f), new Keyframe(0.5f, 0.0015f), new Keyframe(0.8f, 0.01f), new Keyframe(1f, 0.002f));
+        return new AnimationCurve(
+            new Keyframe(0f, 0.002f),
+            new Keyframe(0.2f, 0.01f),
+            new Keyframe(0.5f, 0.0015f),
+            new Keyframe(0.8f, 0.01f),
+            new Keyframe(1f, 0.002f)
+        );
     }
 
     static Gradient DefaultMoonGradient()
     {
         Gradient g = new Gradient();
         g.SetKeys(
-            new GradientColorKey[] {
-                new GradientColorKey(new Color(0.6f,0.65f,0.8f), 0f), // midnight (cool bluish)
-                new GradientColorKey(new Color(0.6f,0.65f,0.8f), 1f)
+            new GradientColorKey[]
+            {
+                new GradientColorKey(new Color(0.6f, 0.65f, 0.8f), 0f),
+                new GradientColorKey(new Color(0.6f, 0.65f, 0.8f), 1f)
             },
-            new GradientAlphaKey[] { new GradientAlphaKey(1f,0f), new GradientAlphaKey(1f,1f) }
+            new GradientAlphaKey[] { new GradientAlphaKey(1f, 0f), new GradientAlphaKey(1f, 1f) }
         );
         return g;
     }
 
     static AnimationCurve DefaultMoonIntensityCurve()
     {
-        // moon is effectively zero in day, peaks at night (normalized)
-        return new AnimationCurve(new Keyframe(0f, 0f), new Keyframe(0.25f, 0.2f), new Keyframe(0.5f, 0.35f), new Keyframe(0.75f, 0.2f), new Keyframe(1f, 0f));
+        return new AnimationCurve(
+            new Keyframe(0f, 0f),
+            new Keyframe(0.25f, 0.2f),
+            new Keyframe(0.5f, 0.35f),
+            new Keyframe(0.75f, 0.2f),
+            new Keyframe(1f, 0f)
+        );
     }
 }
