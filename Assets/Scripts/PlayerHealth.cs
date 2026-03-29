@@ -8,7 +8,7 @@ public class PlayerHealth : MonoBehaviour
     public Volume globalVolume;
 
     [Header("Death Screen")]
-    public CanvasGroup deathCanvasGroup;  // full screen death canvas
+    public CanvasGroup deathCanvasGroup;
     public float fadeInDuration = 1.5f;
 
     private Vignette vignette;
@@ -34,7 +34,8 @@ public class PlayerHealth : MonoBehaviour
         if (Input.GetKeyDown(KeyCode.K)) Die();
 
         if (isDead && vignette != null)
-            vignette.intensity.value = Mathf.Lerp(vignette.intensity.value, 0.7f, Time.deltaTime * 2f);
+            vignette.intensity.value = Mathf.MoveTowards(
+                vignette.intensity.value, 0.7f, Time.deltaTime * 0.5f);
     }
 
     public void Die()
@@ -56,21 +57,22 @@ public class PlayerHealth : MonoBehaviour
         mainRigidbody.constraints = RigidbodyConstraints.None;
         mainRigidbody.AddRelativeTorque(Vector3.right * 10f, ForceMode.Impulse);
 
-        // vignette
+        // start vignette
         if (vignette != null)
         {
             vignette.active = true;
             vignette.color.value = Color.black;
         }
 
-        // unlock cursor and show death screen after short delay
         StartCoroutine(DeathRoutine());
     }
 
     IEnumerator DeathRoutine()
     {
-        // brief pause so the fall over is visible before blackout
+        // brief pause so the fall is visible
         yield return new WaitForSeconds(1.2f);
+
+        Debug.Log($"[PlayerHealth] DeathRoutine: deathCanvasGroup={deathCanvasGroup}");
 
         Cursor.lockState = CursorLockMode.None;
         Cursor.visible = true;
@@ -90,7 +92,6 @@ public class PlayerHealth : MonoBehaviour
         }
     }
 
-    // called by the Try Again button
     public void TryAgain()
     {
         Time.timeScale = 1f;

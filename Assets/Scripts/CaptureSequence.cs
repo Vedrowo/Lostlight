@@ -16,7 +16,7 @@ public class CaptureSequence : MonoBehaviour
     public float dragAnimDistance = 1.0f;
     [Tooltip("How much the camera bumps vertically as the body is dragged along the ground.")]
     public float dragBumpHeight = 0.08f;
-    [Tooltip("How fast the bumping rhythm is (higher = more frequent thuds).")]
+    [Tooltip("How fast the bumping rhythm is.")]
     public float dragBumpFrequency = 3.5f;
     [Tooltip("How much the camera rolls side to side while being dragged.")]
     public float dragRollAmount = 6f;
@@ -27,10 +27,8 @@ public class CaptureSequence : MonoBehaviour
     public float getUpDuration = 2.2f;
 
     [Header("Vignette")]
-    [Tooltip("Find this on your URP Global Volume in the scene.")]
     public Volume globalVolume;
-    [Tooltip("Max vignette darkness.")]
-    public float vignetteMaxIntensity = 0.65f;
+    public float vignetteIntensity = 0.65f;
 
     [Header("Optional inspector target")]
     public Transform inspectorDragDestination;
@@ -42,15 +40,28 @@ public class CaptureSequence : MonoBehaviour
     Image overlayImage;
     bool running;
 
+    // cached references — populated in Awake to avoid mid-coroutine FindObjectOfType calls
+    PlayerCam playerCamComp;
+    MoveCamera moveCamScript;
+    Transform cameraHolder;
+
     void Awake()
     {
         if (Instance == null) Instance = this;
         else if (Instance != this) Destroy(this);
+
         CreateOverlay();
 
-        // auto-find global volume if not assigned
         if (globalVolume == null)
             globalVolume = FindObjectOfType<Volume>();
+
+        // cache camera references once at startup
+        playerCamComp = FindObjectOfType<PlayerCam>();
+        if (playerCamComp != null && playerCamComp.transform.parent != null)
+        {
+            cameraHolder = playerCamComp.transform.parent;
+            moveCamScript = cameraHolder.GetComponent<MoveCamera>();
+        }
     }
 
     void CreateOverlay()
@@ -126,17 +137,15 @@ public class CaptureSequence : MonoBehaviour
         var pm = playerRoot.GetComponent<PlayerMovement>();
         if (pm != null) pm.enabled = false;
 
-        // --- Camera setup ---
-        var playerCamComp = FindObjectOfType<PlayerCam>();
-        Transform camTf = playerCamComp != null ? playerCamComp.transform : Camera.main?.transform;
-
-        MoveCamera moveCamScript = null;
-        Transform cameraHolder = null;
-        if (playerCamComp != null && playerCamComp.transform.parent != null)
+        // use cached camera references; re-find only if null (e.g. scene reload)
+        if (playerCamComp == null) playerCamComp = FindObjectOfType<PlayerCam>();
+        if (playerCamComp != null && cameraHolder == null)
         {
             cameraHolder = playerCamComp.transform.parent;
-            moveCamScript = cameraHolder.GetComponent<MoveCamera>();
+            if (cameraHolder != null) moveCamScript = cameraHolder.GetComponent<MoveCamera>();
         }
+
+        Transform camTf = playerCamComp != null ? playerCamComp.transform : Camera.main?.transform;
 
         if (moveCamScript != null) moveCamScript.enabled = false;
         if (playerCamComp != null) playerCamComp.enabled = false;
@@ -161,22 +170,19 @@ public class CaptureSequence : MonoBehaviour
         yield return Fade(0f, 1f, fadeDuration);
         yield return new WaitForSeconds(0.9f);
 
-        // --- Reveal: camera slams to ground level looking up ---
+        // --- Reveal: camera slams to ground ---
         yield return Fade(1f, 0f, fadeDuration);
 
         float yawAtCapture = camOriginalRotation.eulerAngles.y;
 
-        // drop camera holder to ground level
         if (cameraHolder != null)
         {
             Vector3 groundPos = playerRoot.position;
-            // raycast to find actual ground
             if (Physics.Raycast(playerRoot.position + Vector3.up * 2f, Vector3.down, out RaycastHit floorHit, 10f))
                 groundPos.y = floorHit.point.y + groundCameraHeight;
             cameraHolder.position = groundPos;
         }
 
-        // camera looks straight up (flat on back on the ground)
         if (camTf != null)
         {
             Quaternion onGround = Quaternion.Euler(-90f, yawAtCapture, 0f);
@@ -187,26 +193,19 @@ public class CaptureSequence : MonoBehaviour
         // --- Drag animation ---
         if (gm != null) gm.SetState(GameState.Dragging);
 
-        SetVignette(vignetteMaxIntensity);
+        SetVignette(vignetteIntensity);
 
         float elapsed = 0f;
-        Vector3 dragStartPos = cameraHolder != null ? cameraHolder.position : playerRoot.position;
-
-        // direction of drag: toward the wake destination, flat
-        Vector3 towardFinal = finalWakePos - playerRoot.position;
-        towardFinal.y = 0f;
-        Vector3 dragDir = towardFinal.sqrMagnitude > 0.001f
-            ? towardFinal.normalized
-            : playerRoot.forward;
-
-        // also move the player root so the body slides
+        Vector3 dragDir = finalWakePos - playerRoot.position;
+        dragDir.y = 0f;
+        dragDir = dragDir.sqrMagnitude > 0.001f ? dragDir.normalized : playerRoot.forward;
         Vector3 playerDragStart = playerRoot.position;
 
         while (elapsed < dragAnimDuration)
         {
             float t = elapsed / dragAnimDuration;
 
-            // --- player body slides along ground ---
+            // slide body
             Vector3 bodyTarget = playerDragStart + dragDir * (dragAnimDistance * Mathf.SmoothStep(0f, 1f, t));
             if (rb != null)
                 rb.MovePosition(Vector3.Lerp(rb.position, bodyTarget, Time.deltaTime * 6f));
@@ -219,17 +218,14 @@ public class CaptureSequence : MonoBehaviour
             else
                 playerRoot.position = Vector3.Lerp(playerRoot.position, bodyTarget, Time.deltaTime * 6f);
 
-            // --- camera stays at ground level, slides with body ---
+            // camera follows at ground level with bumps
             if (cameraHolder != null)
             {
-                // ground height at current player position
                 float groundY = playerRoot.position.y;
                 if (Physics.Raycast(playerRoot.position + Vector3.up * 2f, Vector3.down, out RaycastHit gh, 10f))
                     groundY = gh.point.y + groundCameraHeight;
 
-                // bump: sharp jolts like scraping over ground
                 float bump = Mathf.Abs(Mathf.Sin(t * Mathf.PI * dragBumpFrequency * dragAnimDuration)) * dragBumpHeight;
-                // bump fades out toward end (losing energy)
                 bump *= (1f - Mathf.SmoothStep(0.6f, 1f, t));
 
                 Vector3 camGroundPos = playerRoot.position;
@@ -237,12 +233,10 @@ public class CaptureSequence : MonoBehaviour
                 cameraHolder.position = Vector3.Lerp(cameraHolder.position, camGroundPos, Time.deltaTime * 10f);
             }
 
-            // --- camera rotation: looking up with roll sway and bump tilt ---
+            // camera rotation with roll and bump tilt
             if (camTf != null)
             {
-                // roll sways side to side slowly (like body rotating slightly as dragged)
                 float roll = Mathf.Sin(t * Mathf.PI * dragBumpFrequency * 0.5f * dragAnimDuration) * dragRollAmount;
-                // very slight pitch variation (bump tilt)
                 float bumpPitch = Mathf.Sin(t * Mathf.PI * dragBumpFrequency * dragAnimDuration) * 4f;
                 bumpPitch *= (1f - Mathf.SmoothStep(0.6f, 1f, t));
 
@@ -281,14 +275,13 @@ public class CaptureSequence : MonoBehaviour
             rb.constraints = originalConstraints;
         }
 
-        // --- Snap camera to CameraPos ---
+        // snap camera holder to CameraPos on player
         Transform cameraPosTarget = playerRoot.Find("CameraPos");
         if (cameraPosTarget != null && cameraHolder != null)
             cameraHolder.position = cameraPosTarget.position;
         else if (cameraHolder != null)
             cameraHolder.position = wakePosition + Vector3.up * 1.6f;
 
-        // camera still looking up at new position
         if (camTf != null)
         {
             Quaternion lookUpAtNewPos = Quaternion.Euler(-75f, wakeYaw, 0f);
@@ -300,7 +293,8 @@ public class CaptureSequence : MonoBehaviour
         if (stalker != null && haveStalkerDestination)
         {
             var stalkerMove = stalker.GetComponent<StalkerMove>();
-            if (stalkerMove != null) stalkerMove.ReturnToPatrol(finalStalkerPos);
+            if (stalkerMove != null)
+                stalkerMove.ReturnToPatrol(finalStalkerPos);
             else
             {
                 var agent = stalker.GetComponent<UnityEngine.AI.NavMeshAgent>();
@@ -309,7 +303,6 @@ public class CaptureSequence : MonoBehaviour
             }
         }
 
-        // --- Clear vignette ---
         ClearVignette();
 
         // --- Getting up ---
@@ -343,7 +336,7 @@ public class CaptureSequence : MonoBehaviour
             if (playerCamComp != null) playerCamComp.SetRotation(targetCamRot);
         }
 
-        // --- Restore everything ---
+        // --- Restore ---
         if (gm != null) gm.SetState(GameState.EscapeSequence);
 
         ClearVignette();

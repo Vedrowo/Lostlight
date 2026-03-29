@@ -19,14 +19,17 @@ public class GameManager : MonoBehaviour
     public GameState currentState = GameState.Exploration;
 
     [Header("Time of Day")]
-    [Tooltip("Time set when in Exploration state.")]
-    public float explorationTime = 16f;
-    [Tooltip("Time set when player wakes up (GettingUp onwards).")]
+    [Tooltip("Starting time in Exploration.")]
+    public float explorationStartTime = 13f;
+    [Tooltip("Maximum time during Exploration — cycle stops here.")]
+    public float explorationMaxTime = 17.5f;
+    [Tooltip("Time set when player wakes up after being caught.")]
     public float nightTime = 24f;
-    [Tooltip("How long the time transition takes in seconds.")]
-    public float timeTrasitionDuration = 3f;
+    [Tooltip("How long the day-to-night transition takes in seconds.")]
+    public float timeTransitionDuration = 3f;
 
     SunlightControl sunlight;
+    bool timeCapped = false;
 
     void Awake()
     {
@@ -37,9 +40,24 @@ public class GameManager : MonoBehaviour
     void Start()
     {
         sunlight = FindObjectOfType<SunlightControl>();
-        // set initial time immediately with no transition
         if (sunlight != null)
-            sunlight.SetTimeOfDay(explorationTime);
+        {
+            sunlight.SetTimeOfDay(explorationStartTime);
+            sunlight.autoCycle = true;
+        }
+    }
+
+    void Update()
+    {
+        if (timeCapped || sunlight == null) return;
+
+        if ((currentState == GameState.Exploration || currentState == GameState.Chased)
+            && sunlight.timeOfDay >= explorationMaxTime)
+        {
+            sunlight.autoCycle = false;
+            sunlight.SetTimeOfDay(explorationMaxTime);
+            timeCapped = true;
+        }
     }
 
     public void SetState(GameState newState)
@@ -56,28 +74,29 @@ public class GameManager : MonoBehaviour
             {
                 case GameState.Exploration:
                 case GameState.Chased:
+                    if (!timeCapped)
+                        sunlight.autoCycle = true;
+                    break;
+
                 case GameState.Caught:
                 case GameState.Dragging:
                 case GameState.Blackout:
-                    // still daytime during all pre-capture states
-                    sunlight.SetTimeOfDay(explorationTime, 0f);
+                    // freeze time during capture cinematic
+                    sunlight.autoCycle = false;
                     break;
 
                 case GameState.GettingUp:
-                    // transition to night as player wakes up
-                    sunlight.SetTimeOfDay(nightTime, timeTrasitionDuration);
+                    // transition to night as player wakes
+                    sunlight.autoCycle = false;
+                    sunlight.SetTimeOfDay(nightTime, timeTransitionDuration);
                     break;
 
                 case GameState.EscapeSequence:
                 case GameState.Escaped:
-                    // already night, no change needed
                     break;
             }
         }
     }
 
-    public GameState GetState()
-    {
-        return currentState;
-    }
+    public GameState GetState() => currentState;
 }

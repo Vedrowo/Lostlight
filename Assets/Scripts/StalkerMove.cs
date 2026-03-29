@@ -38,7 +38,6 @@ public class StalkerMove : MonoBehaviour
     public Transform[] patrolPoints;
     [Tooltip("When patrolling, only use patrol points within this radius of the player.")]
     public float patrolRadiusAroundPlayer = 30f;
-    public bool patrolLoop = true;
     public float waypointTolerance = 0.5f;
 
     [Header("Chase")]
@@ -47,9 +46,9 @@ public class StalkerMove : MonoBehaviour
 
     [Header("Attack Tuning")]
     public float attackStartRange = 1.6f;
-    public float attackRangeBuffered = 2.5f;   // increased (more forgiving)
-    public float attackLockDuration = 0.45f;   // slightly longer lock
-    public float attackSnapSpeed = 14f;        // stronger pull
+    public float attackRangeBuffered = 2.5f;
+    public float attackLockDuration = 0.45f;
+    public float attackSnapSpeed = 14f;
 
     [Header("Animator")]
     public Animator animator;
@@ -61,7 +60,6 @@ public class StalkerMove : MonoBehaviour
     [Header("Damage")]
     public bool killOnAttack = true;
 
-    // Activation: level/trigger can call Activate() to start the stalker moving
     [Header("Activation")]
     [Tooltip("If true, the stalker will only search for targets after Activate() is called.")]
     public bool requireActivation = true;
@@ -87,50 +85,32 @@ public class StalkerMove : MonoBehaviour
     [Tooltip("Maximum distance at which the 'saw then look away' activation is considered.")]
     public float activationMaxDistance = 100f;
 
-    // NEW: control whether unactivated stalker should still patrol (default = false)
     [Header("Unactivated behavior")]
     [Tooltip("If true the stalker will still patrol near player even when not activated.")]
     public bool patrolWhenUnactivated = false;
 
-    // NEW: display distance on screen
-    [Header("Debug / HUD")]
-    [Tooltip("If true, draws the distance from the stalker to the player on-screen.")]
-    public bool displayDistance = true;
-    [Tooltip("Screen position (pixels) where the distance text will be drawn.")]
-    public Vector2 distanceScreenPos = new Vector2(10f, 10f);
-    [Tooltip("Font size for the distance text.")]
-    public int distanceFontSize = 18;
-    [Tooltip("Color for the distance text.")]
-    public Color distanceColor = Color.white;
-
-    // NEW: verbose activation debug
+    [Header("Debug")]
     [Tooltip("Enable to print activation/visibility debug info to the Console and draw the sight ray.")]
     public bool verboseActivationDebug = false;
 
     NavMeshAgent agent;
-    int patrolIndex;
     bool isChasing;
     Transform currentTarget;
     float lastAttackTime;
 
-    // search internals
     float searchTimer;
-    Vector3 currentSearchPoint;
     bool isSearching;
 
-    // activation internals
     bool hasBeenSeenByPlayer = false;
     bool lastPlayerCanSee = false;
     float playerSeeTimer = 0f;
     float playerLookAwayTimer = 0f;
 
-    // dynamic patrol internals
     int currentDynamicPatrolIndex = -1;
     List<int> currentNearbyPatrolIndices = new List<int>();
 
-    // cache player transform for distance display
+    // cached player transform — refreshed only when null
     Transform playerTransformCached;
-    GUIStyle cachedDistanceStyle;
 
     void Start()
     {
@@ -144,7 +124,6 @@ public class StalkerMove : MonoBehaviour
         agent.stoppingDistance = 1f;
         agent.updateRotation = true;
 
-        patrolIndex = 0;
         currentDynamicPatrolIndex = -1;
         lastAttackTime = -999f;
 
@@ -157,123 +136,98 @@ public class StalkerMove : MonoBehaviour
 
     void Update()
     {
-        // refresh cached player transform if needed
+        // refresh cached player transform only when lost
         if (playerTransformCached == null)
         {
             var pgo = GameObject.FindGameObjectWithTag(targetTag);
             if (pgo != null) playerTransformCached = pgo.transform;
         }
 
-        // find player once per frame if needed
-        GameObject playerObj = GameObject.FindGameObjectWithTag(targetTag);
-        Transform playerTransform = playerObj != null ? playerObj.transform : null;
+        Transform playerTransform = playerTransformCached;
 
-        // Activation logic (auto by player sight or proximity) with distance gating
+        // Activation logic
         if (!activated && requireActivation && playerTransform != null)
         {
-            bool playerCanSee = false;
-
-            // compute player distance early
             float playerDist = Vector3.Distance(transform.position, playerTransform.position);
 
-            // proximity activation immediate
             if (playerDist <= activationProximity)
             {
                 Activate();
             }
-            else
+            else if (playerDist <= activationMaxDistance && autoActivateByPlayerSight)
             {
-                // only consider the look-away activation if player is within activationMaxDistance
-                if (playerDist <= activationMaxDistance && autoActivateByPlayerSight)
+                Transform cam = Camera.main != null ? Camera.main.transform : playerTransform;
+                Vector3 camPos = cam.position;
+                Vector3 stalkerCenter = transform.position + Vector3.up * eyeHeight;
+                Vector3 dirToStalker = stalkerCenter - camPos;
+                float distToStalker = dirToStalker.magnitude;
+                Vector3 dirNorm = dirToStalker.normalized;
+                float angle = Vector3.Angle(cam.forward, dirNorm);
+
+                bool playerCanSee = false;
+                if (angle <= playerSeeAngle)
                 {
-                    // try camera first, fallback to player transform forward if no camera
-                    Transform cam = Camera.main != null ? Camera.main.transform : playerTransform;
-                    Vector3 camPos = cam.position;
-                    Vector3 stalkerCenter = transform.position + Vector3.up * eyeHeight;
-                    Vector3 dirToStalker = (stalkerCenter - camPos);
-                    float distToStalker = dirToStalker.magnitude;
-                    Vector3 dirNorm = dirToStalker.normalized;
-                    float angle = Vector3.Angle(cam.forward, dirNorm);
+                    RaycastHit hit;
+                    bool blocked = (int)playerVisionMask == 0
+                        ? Physics.Raycast(camPos, dirNorm, out hit, distToStalker)
+                        : Physics.Raycast(camPos, dirNorm, out hit, distToStalker, playerVisionMask);
 
-                    if (angle <= playerSeeAngle)
+                    playerCanSee = !blocked;
+
+                    if (verboseActivationDebug)
                     {
-                        bool blocked = false;
-                        RaycastHit hit;
-                        if ((int)playerVisionMask == 0)
+                        Debug.DrawRay(camPos, dirNorm * distToStalker, playerCanSee ? Color.green : Color.red, 0.15f);
+                        if (playerCanSee != lastPlayerCanSee)
                         {
-                            blocked = Physics.Raycast(camPos, dirNorm, out hit, distToStalker);
+                            string hitName = hit.collider != null ? hit.collider.name : "none";
+                            Debug.Log($"[StalkerDebug] '{gameObject.name}': playerCanSee={playerCanSee} dist={playerDist:F1} angle={angle:F1} blocked={blocked} hit={hitName}");
                         }
-                        else
-                        {
-                            blocked = Physics.Raycast(camPos, dirNorm, out hit, distToStalker, playerVisionMask);
-                        }
+                    }
+                }
 
-                        playerCanSee = !blocked;
+                if (playerCanSee)
+                {
+                    playerSeeTimer += Time.deltaTime;
+                    playerLookAwayTimer = 0f;
+                    if (playerSeeTimer >= requiredSightTime)
+                    {
+                        hasBeenSeenByPlayer = true;
+                        lastPlayerCanSee = true;
 
                         if (verboseActivationDebug)
-                        {
-                            // draw debug ray and log on state change
-                            Debug.DrawRay(camPos, dirNorm * distToStalker, playerCanSee ? Color.green : Color.red, 0.15f);
-                            if (playerCanSee != lastPlayerCanSee)
-                            {
-                                string hitName = hit.collider != null ? hit.collider.name : "none";
-                                Debug.Log($"[StalkerDebug] '{gameObject.name}': playerCanSee={playerCanSee} dist={playerDist:F1} angle={angle:F1} blocked={blocked} hit={hitName}");
-                            }
-                        }
-                    }
-
-                    // sight debounce: require continuous sight for requiredSightTime to count as "seen"
-                    if (playerCanSee)
-                    {
-                        playerSeeTimer += Time.deltaTime;
-                        playerLookAwayTimer = 0f;
-                        if (playerSeeTimer >= requiredSightTime)
-                        {
-                            if (!hasBeenSeenByPlayer)
-                                hasBeenSeenByPlayer = true;
-                            lastPlayerCanSee = true;
-
-                            if (verboseActivationDebug)
-                                Debug.Log($"[StalkerDebug] '{gameObject.name}' registered continuous sight (timer={playerSeeTimer:F2})");
-                        }
-                    }
-                    else
-                    {
-                        playerSeeTimer = 0f;
-                        if (lastPlayerCanSee || hasBeenSeenByPlayer)
-                        {
-                            playerLookAwayTimer += Time.deltaTime;
-                            if (playerLookAwayTimer >= requiredLookAwayTime && hasBeenSeenByPlayer)
-                            {
-                                // player looked away long enough after seeing -> activate
-                                if (verboseActivationDebug)
-                                    Debug.Log($"[StalkerDebug] '{gameObject.name}' look-away timer reached ({playerLookAwayTimer:F2}) -> Activate()");
-                                Activate();
-                            }
-                        }
-                        lastPlayerCanSee = false;
+                            Debug.Log($"[StalkerDebug] '{gameObject.name}' registered continuous sight (timer={playerSeeTimer:F2})");
                     }
                 }
                 else
                 {
-                    // player too far: reset look timers so we don't trigger because of stale state
                     playerSeeTimer = 0f;
-                    playerLookAwayTimer = 0f;
+                    if (lastPlayerCanSee || hasBeenSeenByPlayer)
+                    {
+                        playerLookAwayTimer += Time.deltaTime;
+                        if (playerLookAwayTimer >= requiredLookAwayTime && hasBeenSeenByPlayer)
+                        {
+                            if (verboseActivationDebug)
+                                Debug.Log($"[StalkerDebug] '{gameObject.name}' look-away timer reached ({playerLookAwayTimer:F2}) -> Activate()");
+                            Activate();
+                        }
+                    }
                     lastPlayerCanSee = false;
                 }
             }
+            else
+            {
+                playerSeeTimer = 0f;
+                playerLookAwayTimer = 0f;
+                lastPlayerCanSee = false;
+            }
         }
 
-        // if activation is required and not activated, optionally patrol or remain idle
         if (!activated && requireActivation)
         {
             if (patrolWhenUnactivated)
-            {
                 DoPatrolNearPlayer(playerTransform);
-            }
             else
             {
-                // ENSURE IDLE: stop agent and clear any path so stalker won't wander
                 if (agent != null)
                 {
                     agent.isStopped = true;
@@ -291,7 +245,7 @@ public class StalkerMove : MonoBehaviour
 
         if (isChasing && currentTarget != null)
             DoChase();
-        else if (isChasing) // lost target but still searching
+        else if (isChasing)
             DoSearch();
         else
             DoPatrolNearPlayer(playerTransform);
@@ -299,34 +253,29 @@ public class StalkerMove : MonoBehaviour
         UpdateAnimation();
     }
 
-    // call from level script / camera when player "sees" the stalker (external hook)
     public void Activate()
     {
         activated = true;
         hasBeenSeenByPlayer = true;
-        // make sure agent resumes movement when activated
+
         if (agent != null)
             agent.isStopped = false;
 
-        // Set the animator boolean you added so Animator transitions out of idle.
         if (animator != null && !string.IsNullOrEmpty(triggeredBoolName))
             animator.SetBool(triggeredBoolName, true);
 
         Debug.Log($"StalkerMove.Activate() called on '{gameObject.name}'");
-        // optionally start moving immediately towards player last seen position
     }
 
     void UpdateTarget()
     {
-        GameObject player = GameObject.FindGameObjectWithTag(targetTag);
-        if (player == null) return;
+        if (playerTransformCached == null) return;
 
-        Transform target = player.transform;
+        Transform target = playerTransformCached;
         float dist = Vector3.Distance(transform.position, target.position);
 
         bool canSee = false;
 
-        // VISION
         if (dist <= detectionRadius)
         {
             Vector3 eyePos = transform.position + Vector3.up * eyeHeight;
@@ -335,7 +284,6 @@ public class StalkerMove : MonoBehaviour
 
             if (angle < fieldOfViewAngle / 2f)
             {
-                // raycast against obstacles; obstacleMask should include world geometry colliders (meshes, capsules, etc.)
                 if (!Physics.Raycast(eyePos, dir, dist, obstacleMask))
                 {
                     canSee = true;
@@ -345,30 +293,20 @@ public class StalkerMove : MonoBehaviour
             }
         }
 
-        // HEARING
-        // Prefer PlayerMovement noise if available
         float moveNoise = 0f;
-        var pm = player.GetComponent<PlayerMovement>();
+        var pm = target.GetComponent<PlayerMovement>();
         if (pm != null)
-        {
             moveNoise = pm.NoiseLevel;
-        }
         else
         {
-            var rb = player.GetComponent<Rigidbody>();
+            var rb = target.GetComponent<Rigidbody>();
             if (rb != null)
                 moveNoise = new Vector3(rb.linearVelocity.x, 0f, rb.linearVelocity.z).magnitude;
-        }   
+        }
 
         float effectiveHearing = hearingRadius;
-
-        // if player is loud (running) amplify hearing radius
-        if (moveNoise > 3f)
-            effectiveHearing *= loudHearingMultiplier;
-
-        // if player is crouching, reduce hearing sensitivity
-        if (pm != null && pm.IsCrouching)
-            effectiveHearing *= 0.45f;
+        if (moveNoise > 3f) effectiveHearing *= loudHearingMultiplier;
+        if (pm != null && pm.IsCrouching) effectiveHearing *= 0.45f;
 
         bool canHear = dist <= effectiveHearing;
 
@@ -380,11 +318,9 @@ public class StalkerMove : MonoBehaviour
         }
         else if (isChasing && Time.time > lastSeenTime + chasePersistence)
         {
-            // lost target, start searching near last seen position
             currentTarget = null;
             isSearching = true;
             searchTimer = 0f;
-            currentSearchPoint = lastSeenPosition;
             lastSeenTime = Time.time;
         }
     }
@@ -397,7 +333,6 @@ public class StalkerMove : MonoBehaviour
         {
             agent.isStopped = false;
 
-            // Prediction: prefer Rigidbody, then PlayerMovement.CurrentVelocity, then CharacterController
             Vector3 targetVelocity = Vector3.zero;
             var rb = currentTarget.GetComponent<Rigidbody>();
             if (rb != null)
@@ -416,13 +351,9 @@ public class StalkerMove : MonoBehaviour
             }
 
             float dist = Vector3.Distance(transform.position, currentTarget.position);
-
-            // dynamic prediction time: closer -> smaller prediction, farther -> more prediction but clamp
             float predictionTime = Mathf.Clamp(dist / (agent.speed + targetVelocity.magnitude + 0.1f), 0.05f, 1.0f);
-
             Vector3 predictedPosition = currentTarget.position + targetVelocity * predictionTime;
 
-            // ensure predicted point is on the NavMesh; fallback to current target position if not
             NavMeshHit hit;
             Vector3 navDestination = currentTarget.position;
             if (NavMesh.SamplePosition(predictedPosition, out hit, 2f, NavMesh.AllAreas))
@@ -431,28 +362,23 @@ public class StalkerMove : MonoBehaviour
                 navDestination = hit.position;
 
             agent.SetDestination(navDestination);
-
             lastSeenPosition = currentTarget.position;
             lastSeenTime = Time.time;
         }
         else
         {
-            // this path should be handled by DoSearch; keep fallback to last position
             agent.SetDestination(lastSeenPosition);
-
             if (!agent.pathPending && agent.remainingDistance <= 1f)
             {
                 isChasing = false;
                 isSearching = false;
-                return;
             }
         }
 
-        // ATTACK TRIGGER
+        // attack
         if (currentTarget != null && Time.time >= lastAttackTime + attackCooldown)
         {
             float dist = Vector3.Distance(transform.position, currentTarget.position);
-
             if (dist <= attackStartRange)
             {
                 StartCoroutine(AttackRoutine(currentTarget));
@@ -465,27 +391,22 @@ public class StalkerMove : MonoBehaviour
     {
         agent.speed = speed;
 
-        // pick a new random search point every interval
         searchTimer += Time.deltaTime;
         if (searchTimer >= searchPointInterval || !agent.hasPath)
         {
             searchTimer = 0f;
-
-            // sample a random point on NavMesh around lastSeenPosition
             for (int i = 0; i < 10; i++)
             {
                 Vector3 rand = lastSeenPosition + Random.insideUnitSphere * searchRadius;
                 NavMeshHit hit;
                 if (NavMesh.SamplePosition(rand, out hit, 4f, NavMesh.AllAreas))
                 {
-                    currentSearchPoint = hit.position;
-                    agent.SetDestination(currentSearchPoint);
+                    agent.SetDestination(hit.position);
                     break;
                 }
             }
         }
 
-        // stop searching after chasePersistence elapsed since last seen
         if (Time.time > lastSeenTime + chasePersistence)
         {
             isChasing = false;
@@ -499,7 +420,7 @@ public class StalkerMove : MonoBehaviour
     {
         if (target == null) yield break;
 
-        agent.isStopped = true; // stop navmesh fighting
+        agent.isStopped = true;
 
         if (animator != null)
         {
@@ -508,26 +429,22 @@ public class StalkerMove : MonoBehaviour
         }
 
         float timer = 0f;
+        bool hitLanded = false;
 
         while (timer < attackLockDuration)
         {
             if (target == null) yield break;
 
-            Vector3 dir = (target.position - transform.position);
+            Vector3 dir = target.position - transform.position;
             dir.y = 0;
-
             if (dir.magnitude > 0.1f)
-            {
-                Vector3 move = dir.normalized * attackSnapSpeed * Time.deltaTime;
-                agent.Move(move);
-            }
+                agent.Move(dir.normalized * attackSnapSpeed * Time.deltaTime);
 
-            // immediate-hit check while locked: if close enough, apply kill immediately
             float nowDist = Vector3.Distance(transform.position, target.position);
             if (nowDist <= attackStartRange)
             {
-                if (killOnAttack)
-                    TryKillTarget(target);
+                if (killOnAttack) TryKillTarget(target);
+                hitLanded = true;
                 break;
             }
 
@@ -535,13 +452,14 @@ public class StalkerMove : MonoBehaviour
             yield return null;
         }
 
-        // FINAL HIT (VERY forgiving) - fallback if the immediate check didn't kill
-        float finalDist = Vector3.Distance(transform.position, target.position);
-
-        if (finalDist <= attackRangeBuffered + 0.5f)
+        // fallback hit if the loop ended without landing one
+        if (!hitLanded)
         {
-            if (killOnAttack)
-                TryKillTarget(target);
+            float finalDist = Vector3.Distance(transform.position, target.position);
+            if (finalDist <= attackRangeBuffered + 0.5f)
+            {
+                if (killOnAttack) TryKillTarget(target);
+            }
         }
 
         agent.isStopped = false;
@@ -553,39 +471,47 @@ public class StalkerMove : MonoBehaviour
     void TryKillTarget(Transform target)
     {
         if (target == null) return;
-        if (GameManager.Instance.GetState() != GameState.Exploration &&
-        GameManager.Instance.GetState() != GameState.EscapeSequence)
-            return; // don't kill player outside normal gameplay
 
-        var ph = target.GetComponent<PlayerHealth>() ??
-                 target.GetComponentInChildren<PlayerHealth>() ??
-                 target.root.GetComponent<PlayerHealth>();
+        // block during any cinematic or end state
+        var state = GameManager.Instance.GetState();
+        if (state == GameState.Caught ||
+            state == GameState.Dragging ||
+            state == GameState.GettingUp ||
+            state == GameState.Escaped)
+            return;
+
+        var ph = target.GetComponent<PlayerHealth>()
+              ?? target.GetComponentInChildren<PlayerHealth>()
+              ?? target.root.GetComponent<PlayerHealth>();
+
+        if (ph == null)
+        {
+            // last resort: find via tag in case hierarchy is split
+            var playerGO = GameObject.FindGameObjectWithTag(targetTag);
+            if (playerGO != null)
+                ph = playerGO.GetComponent<PlayerHealth>() ?? playerGO.GetComponentInChildren<PlayerHealth>();
+        }
 
         if (ph == null) return;
 
-        // FIRST TIME capture
+        // first capture
         if (!GameManager.Instance.hasBeenCaught)
         {
             GameManager.Instance.hasBeenCaught = true;
             GameManager.Instance.SetState(GameState.Caught);
-
-            // Start the capture cinematic / sequence that performs hit, blackout, staged dragging and transition to EscapeSequence.
             CaptureSequence.Trigger(target, transform);
             return;
         }
-        Debug.Log("[Stalker] Attempting to kill player...");
-        // AFTER THAT normal death
+
+        // subsequent hits: normal death
+        Debug.Log("[Stalker] Calling ph.Die()");
         ph.Die();
-        Debug.Log("[Stalker] Player.Die() called successfully.");
     }
 
-    // Public helper to teleport the stalker to a new position and reset it to normal patrol state.
-    // Use NavMeshAgent.Warp so NavMesh stays consistent.
     public void ReturnToPatrol(Vector3 worldPosition)
     {
         if (agent != null)
         {
-            // warp to destination so navmesh doesn't try to path-find through the teleport gap
             agent.Warp(worldPosition);
             agent.ResetPath();
             agent.isStopped = false;
@@ -595,10 +521,7 @@ public class StalkerMove : MonoBehaviour
             transform.position = worldPosition;
         }
 
-        // reset dynamic patrol selection so it will pick appropriate nearby point next Update
         currentDynamicPatrolIndex = -1;
-
-        // make sure the stalker resumes normal patrol/chase logic immediately
         activated = true;
         isChasing = false;
         isSearching = false;
@@ -607,22 +530,14 @@ public class StalkerMove : MonoBehaviour
         lastPlayerCanSee = false;
         playerSeeTimer = 0f;
         playerLookAwayTimer = 0f;
-        // In ReturnToPatrol or after the escape sequence, make sure killOnAttack = true
         killOnAttack = true;
 
-        // clear animator attack state
         if (animator != null)
-        {
             animator.SetBool(attackBoolName, false);
-            // do not forcibly clear triggeredBoolName if you want the stalker to keep its "triggered" personality;
-            // if you'd prefer it to return to idle animation, uncomment the next line:
-            // if (!string.IsNullOrEmpty(triggeredBoolName)) animator.SetBool(triggeredBoolName, false);
-        }
 
         Debug.Log($"Stalker '{gameObject.name}' returned to patrol at {worldPosition}");
     }
 
-    // Patrolling around player's vicinity: select dynamic subset of patrolPoints within patrolRadiusAroundPlayer
     void DoPatrolNearPlayer(Transform playerTransform)
     {
         agent.speed = speed;
@@ -633,7 +548,18 @@ public class StalkerMove : MonoBehaviour
             return;
         }
 
-        // build nearby list if player available, otherwise fallback to all points
+        // if current destination drifted out of range, pick a new point immediately
+        if (currentDynamicPatrolIndex >= 0 && playerTransform != null)
+        {
+            float distFromPlayer = Vector3.Distance(playerTransform.position, patrolPoints[currentDynamicPatrolIndex].position);
+            if (distFromPlayer > patrolRadiusAroundPlayer)
+            {
+                currentDynamicPatrolIndex = -1;
+                agent.ResetPath();
+            }
+        }
+
+        // build nearby list
         currentNearbyPatrolIndices.Clear();
         if (playerTransform != null)
         {
@@ -650,13 +576,11 @@ public class StalkerMove : MonoBehaviour
         if (currentNearbyPatrolIndices.Count == 0)
         {
             for (int i = 0; i < patrolPoints.Length; i++)
-            {
                 if (patrolPoints[i] != null)
                     currentNearbyPatrolIndices.Add(i);
-            }
         }
 
-        // select a current point if none selected
+        // pick initial point
         if (currentDynamicPatrolIndex < 0 && currentNearbyPatrolIndices.Count > 0)
         {
             currentDynamicPatrolIndex = currentNearbyPatrolIndices[Random.Range(0, currentNearbyPatrolIndices.Count)];
@@ -676,7 +600,6 @@ public class StalkerMove : MonoBehaviour
 
         if (!agent.pathPending && agent.remainingDistance <= waypointTolerance)
         {
-            // pick next random nearby point (avoid repeating same point immediately if possible)
             int nextIndex = currentDynamicPatrolIndex;
             if (currentNearbyPatrolIndices.Count > 1)
             {
@@ -687,7 +610,6 @@ public class StalkerMove : MonoBehaviour
                     attempts++;
                 }
             }
-
             currentDynamicPatrolIndex = nextIndex;
             agent.SetDestination(patrolPoints[currentDynamicPatrolIndex].position);
         }
@@ -697,30 +619,5 @@ public class StalkerMove : MonoBehaviour
     {
         if (animator == null || string.IsNullOrEmpty(runParamName)) return;
         animator.SetBool(runParamName, isChasing && !agent.isStopped);
-    }
-
-    // Draw distance HUD
-    void OnGUI()
-    {
-        if (!displayDistance) return;
-        if (playerTransformCached == null)
-        {
-            var pgo = GameObject.FindGameObjectWithTag(targetTag);
-            if (pgo == null) return;
-            playerTransformCached = pgo.transform;
-        }
-
-        float dist = Vector3.Distance(transform.position, playerTransformCached.position);
-
-        if (cachedDistanceStyle == null)
-        {
-            cachedDistanceStyle = new GUIStyle(GUI.skin.label);
-            cachedDistanceStyle.fontSize = Mathf.Max(10, distanceFontSize);
-            cachedDistanceStyle.normal.textColor = distanceColor;
-        }
-
-        string text = $"Stalker distance: {dist:F1} m";
-        Rect r = new Rect(distanceScreenPos.x, distanceScreenPos.y, 400f, cachedDistanceStyle.fontSize + 6);
-        GUI.Label(r, text, cachedDistanceStyle);
     }
 }
