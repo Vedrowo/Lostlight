@@ -80,13 +80,13 @@ MonoBehaviour:
     m_Value: 0
   density:
     m_OverrideState: 1
-    m_Value: 0.1
+    m_Value: 0.2
   attenuationDistance:
-    m_OverrideState: 0
-    m_Value: 128
+    m_OverrideState: 1
+    m_Value: 256
   enableAPVContribution:
-    m_OverrideState: 0
-    m_Value: 0
+    m_OverrideState: 1
+    m_Value: 1
   APVContributionWeight:
     m_OverrideState: 1
     m_Value: 1
@@ -95,13 +95,13 @@ MonoBehaviour:
     m_Value: 1
   anisotropy:
     m_OverrideState: 1
-    m_Value: 1
+    m_Value: -0.1
   scattering:
     m_OverrideState: 1
-    m_Value: 0.2
+    m_Value: 0.14
   tint:
     m_OverrideState: 1
-    m_Value: {r: 1, g: 1, b: 1, a: 1}
+    m_Value: {r: 2, g: 2, b: 2, a: 1}
   enableAdditionalLightsContribution:
     m_OverrideState: 1
     m_Value: 1
@@ -129,7 +129,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: f5944d5dca791344186c8265c2b87ac4, type: 3}
   m_Name: VolumetricClouds
   m_EditorClassIdentifier: VolumetricCloudsURP::VolumetricClouds
-  active: 0
+  active: 1
   state:
     m_OverrideState: 1
     m_Value: 1

@@ -1,10 +1,16 @@
+using System.Collections;
 using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.Rendering.Universal;
 
 public class PlayerHealth : MonoBehaviour
 {
-    public Volume globalVolume; // Drag your Global Volume here in the Inspector
+    public Volume globalVolume;
+
+    [Header("Death Screen")]
+    public CanvasGroup deathCanvasGroup;  // full screen death canvas
+    public float fadeInDuration = 1.5f;
+
     private Vignette vignette;
     private bool isDead = false;
     private Rigidbody mainRigidbody;
@@ -12,10 +18,14 @@ public class PlayerHealth : MonoBehaviour
     void Awake()
     {
         mainRigidbody = GetComponent<Rigidbody>();
-        // Try to find the Vignette setting in your Global Volume
+
         if (globalVolume != null && globalVolume.profile.TryGet(out Vignette v))
-        {
             vignette = v;
+
+        if (deathCanvasGroup != null)
+        {
+            deathCanvasGroup.alpha = 0f;
+            deathCanvasGroup.gameObject.SetActive(false);
         }
     }
 
@@ -23,11 +33,8 @@ public class PlayerHealth : MonoBehaviour
     {
         if (Input.GetKeyDown(KeyCode.K)) Die();
 
-        // Smoothly increase the blackout if we are dead
         if (isDead && vignette != null)
-        {
             vignette.intensity.value = Mathf.Lerp(vignette.intensity.value, 0.7f, Time.deltaTime * 2f);
-        }
     }
 
     public void Die()
@@ -35,22 +42,59 @@ public class PlayerHealth : MonoBehaviour
         if (isDead) return;
         isDead = true;
 
-        // 1. Kill Movement
+        // disable movement
         if (TryGetComponent<PlayerMovement>(out var move)) move.enabled = false;
 
-        // 2. Fall Over
+        // disable camera
+        var playerCamComp = FindObjectOfType<PlayerCam>();
+        if (playerCamComp != null) playerCamComp.enabled = false;
+
+        var moveCam = FindObjectOfType<MoveCamera>();
+        if (moveCam != null) moveCam.enabled = false;
+
+        // fall over
         mainRigidbody.constraints = RigidbodyConstraints.None;
         mainRigidbody.AddRelativeTorque(Vector3.right * 10f, ForceMode.Impulse);
 
-        // 3. Kill Camera Control (but let it fall with the body)
-        var cam = GetComponentInChildren<PlayerCam>();
-        if (cam != null) cam.enabled = false;
-
-        // 4. Start the Blackout
+        // vignette
         if (vignette != null)
         {
             vignette.active = true;
             vignette.color.value = Color.black;
         }
+
+        // unlock cursor and show death screen after short delay
+        StartCoroutine(DeathRoutine());
+    }
+
+    IEnumerator DeathRoutine()
+    {
+        // brief pause so the fall over is visible before blackout
+        yield return new WaitForSeconds(1.2f);
+
+        Cursor.lockState = CursorLockMode.None;
+        Cursor.visible = true;
+
+        if (deathCanvasGroup != null)
+        {
+            deathCanvasGroup.gameObject.SetActive(true);
+
+            float elapsed = 0f;
+            while (elapsed < fadeInDuration)
+            {
+                deathCanvasGroup.alpha = Mathf.Lerp(0f, 1f, elapsed / fadeInDuration);
+                elapsed += Time.deltaTime;
+                yield return null;
+            }
+            deathCanvasGroup.alpha = 1f;
+        }
+    }
+
+    // called by the Try Again button
+    public void TryAgain()
+    {
+        Time.timeScale = 1f;
+        UnityEngine.SceneManagement.SceneManager.LoadScene(
+            UnityEngine.SceneManagement.SceneManager.GetActiveScene().buildIndex);
     }
 }

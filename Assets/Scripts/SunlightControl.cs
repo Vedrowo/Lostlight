@@ -180,7 +180,7 @@ public class SunlightControl : MonoBehaviour
 
         // Remap so moonCurveT = 0.5 at midnight regardless of wall-clock wrap
         float moonCurveT = Mathf.Repeat(n + 0.5f, 1f);
-        moon.intensity = moonIntensityOverNight.Evaluate(moonCurveT) * 0.5f;
+        moon.intensity = moonIntensityOverNight.Evaluate(moonCurveT) * 0.15f;
         moon.color = moonColorOverNight.Evaluate(n);
     }
 
@@ -237,7 +237,7 @@ public class SunlightControl : MonoBehaviour
         if (RenderSettings.skybox != null)
         {
             float skyT = Mathf.InverseLerp(skyboxNightThreshold, skyboxDayThreshold, sunScale);
-            float skyExp = Mathf.Lerp(nightSkyExposure, 1.5f, skyT);
+            float skyExp = Mathf.Lerp(nightSkyExposure, 1.0f, skyT);
             float skyAtmo = Mathf.Lerp(nightAtmosphericThickness, 1f, skyT);
 
             // Only write material properties when they change meaningfully (avoid per-frame material dirtying)
@@ -298,10 +298,11 @@ public class SunlightControl : MonoBehaviour
         g.SetKeys(
             new GradientColorKey[]
             {
-                new GradientColorKey(new Color(0.07f, 0.08f, 0.09f), 0f),
-                new GradientColorKey(new Color(0.6f,  0.6f,  0.65f), 0.3f),
-                new GradientColorKey(new Color(0.6f,  0.6f,  0.65f), 0.7f),
-                new GradientColorKey(new Color(0.07f, 0.08f, 0.09f), 1f)
+            new GradientColorKey(new Color(0.07f, 0.08f, 0.09f), 0f),   // midnight: dark
+            new GradientColorKey(new Color(0.55f, 0.42f, 0.28f), 0.22f), // sunrise: warm amber
+            new GradientColorKey(new Color(0.45f, 0.48f, 0.42f), 0.5f),  // midday: muted olive-grey, not white
+            new GradientColorKey(new Color(0.52f, 0.38f, 0.25f), 0.78f), // sunset: warm again
+            new GradientColorKey(new Color(0.07f, 0.08f, 0.09f), 1f)    // midnight: dark
             },
             new GradientAlphaKey[] { new GradientAlphaKey(1f, 0f), new GradientAlphaKey(1f, 1f) }
         );
