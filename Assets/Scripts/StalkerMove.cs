@@ -53,7 +53,6 @@ public class StalkerMove : MonoBehaviour
     [Header("Animator")]
     public Animator animator;
     public string runParamName = "isRunning";
-    public string attackTriggerName = "Attack";
     public string attackBoolName = "isAttacking";
     public string triggeredBoolName = "isTriggered";
 
@@ -63,7 +62,7 @@ public class StalkerMove : MonoBehaviour
     [Header("Activation")]
     [Tooltip("If true, the stalker will only search for targets after Activate() is called.")]
     public bool requireActivation = true;
-    bool activated = false;
+    public bool activated = false;
 
     [Header("Player-activation options")]
     [Tooltip("If true the stalker will auto-activate when the player first sees it and then looks away.")]
@@ -88,6 +87,12 @@ public class StalkerMove : MonoBehaviour
     [Header("Unactivated behavior")]
     [Tooltip("If true the stalker will still patrol near player even when not activated.")]
     public bool patrolWhenUnactivated = false;
+
+    [Header("Activation Prompt")]
+    [Tooltip("UI Text object that shows when the stalker activates. Will auto-hide after a few seconds.")]
+    public GameObject activationPromptUI;
+    [Tooltip("How long the prompt stays on screen.")]
+    public float promptDuration = 3f;
 
     [Header("Debug")]
     [Tooltip("Enable to print activation/visibility debug info to the Console and draw the sight ray.")]
@@ -154,7 +159,7 @@ public class StalkerMove : MonoBehaviour
             {
                 Activate();
             }
-            else if (playerDist <= activationMaxDistance && autoActivateByPlayerSight)
+            else if (autoActivateByPlayerSight)
             {
                 Transform cam = Camera.main != null ? Camera.main.transform : playerTransform;
                 Vector3 camPos = cam.position;
@@ -164,8 +169,10 @@ public class StalkerMove : MonoBehaviour
                 Vector3 dirNorm = dirToStalker.normalized;
                 float angle = Vector3.Angle(cam.forward, dirNorm);
 
+                bool playerFacingStalker = angle <= playerSeeAngle;
                 bool playerCanSee = false;
-                if (angle <= playerSeeAngle)
+
+                if (playerFacingStalker && playerDist <= activationMaxDistance)
                 {
                     RaycastHit hit;
                     bool blocked = (int)playerVisionMask == 0
@@ -187,6 +194,7 @@ public class StalkerMove : MonoBehaviour
 
                 if (playerCanSee)
                 {
+                    // accumulate sight time
                     playerSeeTimer += Time.deltaTime;
                     playerLookAwayTimer = 0f;
                     if (playerSeeTimer >= requiredSightTime)
@@ -195,30 +203,38 @@ public class StalkerMove : MonoBehaviour
                         lastPlayerCanSee = true;
 
                         if (verboseActivationDebug)
-                            Debug.Log($"[StalkerDebug] '{gameObject.name}' registered continuous sight (timer={playerSeeTimer:F2})");
+                            Debug.Log($"[StalkerDebug] '{gameObject.name}' registered sight (timer={playerSeeTimer:F2})");
                     }
                 }
                 else
                 {
                     playerSeeTimer = 0f;
-                    if (lastPlayerCanSee || hasBeenSeenByPlayer)
+
+                    if (hasBeenSeenByPlayer)
                     {
-                        playerLookAwayTimer += Time.deltaTime;
-                        if (playerLookAwayTimer >= requiredLookAwayTime && hasBeenSeenByPlayer)
+                        bool walkedOutOfRange = playerDist > activationMaxDistance;
+                        bool lookedAway = !playerFacingStalker;
+
+                        if (walkedOutOfRange || lookedAway)
                         {
-                            if (verboseActivationDebug)
-                                Debug.Log($"[StalkerDebug] '{gameObject.name}' look-away timer reached ({playerLookAwayTimer:F2}) -> Activate()");
-                            Activate();
+                            // walked out of sight range while watching, OR turned away — start timer
+                            playerLookAwayTimer += Time.deltaTime;
+                            if (playerLookAwayTimer >= requiredLookAwayTime)
+                            {
+                                if (verboseActivationDebug)
+                                    Debug.Log($"[StalkerDebug] '{gameObject.name}' triggered (walkedOut={walkedOutOfRange} lookedAway={lookedAway}) -> Activate()");
+                                Activate();
+                            }
+                        }
+                        else
+                        {
+                            // blocked by geometry only — reset timer, don't penalise
+                            playerLookAwayTimer = 0f;
                         }
                     }
+
                     lastPlayerCanSee = false;
                 }
-            }
-            else
-            {
-                playerSeeTimer = 0f;
-                playerLookAwayTimer = 0f;
-                lastPlayerCanSee = false;
             }
         }
 
@@ -264,7 +280,17 @@ public class StalkerMove : MonoBehaviour
         if (animator != null && !string.IsNullOrEmpty(triggeredBoolName))
             animator.SetBool(triggeredBoolName, true);
 
+        if (activationPromptUI != null)
+            StartCoroutine(ShowPrompt());
+
         Debug.Log($"StalkerMove.Activate() called on '{gameObject.name}'");
+    }
+
+    IEnumerator ShowPrompt()
+    {
+        activationPromptUI.SetActive(true);
+        yield return new WaitForSeconds(promptDuration);
+        activationPromptUI.SetActive(false);
     }
 
     void UpdateTarget()
@@ -424,7 +450,6 @@ public class StalkerMove : MonoBehaviour
 
         if (animator != null)
         {
-            animator.SetTrigger(attackTriggerName);
             animator.SetBool(attackBoolName, true);
         }
 

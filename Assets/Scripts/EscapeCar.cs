@@ -11,14 +11,18 @@ public class EscapeCar : MonoBehaviour
 
     [Header("Escape Screen")]
     public CanvasGroup escapeCanvasGroup;
-    public TextMeshProUGUI escapedText;      // "You Escaped" text
-    public CanvasGroup creditsCanvasGroup;   // separate CanvasGroup just for the credits block
-    public TextMeshProUGUI creditsText;      // the credits text
+    public TextMeshProUGUI escapedText;
+    public CanvasGroup creditsCanvasGroup;
+    public TextMeshProUGUI creditsText;
 
     [Header("Timing")]
-    public float fadeInDuration = 2f;        // how long "You Escaped" fades in
-    public float holdBeforeCredits = 2.5f;   // pause before credits start
-    public float creditsFadeDuration = 2f;   // how long credits fade in
+    public float fadeInDuration = 2f;
+    public float holdBeforeCredits = 2.5f;
+    public float creditsFadeDuration = 2f;
+
+    [Header("References")]
+    [Tooltip("Drag the stalker GameObject here.")]
+    public StalkerMove stalker;
 
     Transform playerCam;
     Transform playerBody;
@@ -36,6 +40,10 @@ public class EscapeCar : MonoBehaviour
         var pm = FindObjectOfType<PlayerMovement>();
         if (pm != null) playerBody = pm.transform;
 
+        // auto-find stalker if not assigned in inspector
+        if (stalker == null)
+            stalker = FindObjectOfType<StalkerMove>();
+
         if (escapeCanvasGroup != null)
         {
             escapeCanvasGroup.alpha = 0f;
@@ -43,11 +51,8 @@ public class EscapeCar : MonoBehaviour
         }
 
         if (creditsCanvasGroup != null)
-        {
             creditsCanvasGroup.alpha = 0f;
-        }
 
-        // set default credits text if none assigned in inspector
         if (creditsText != null && string.IsNullOrEmpty(creditsText.text))
         {
             creditsText.text =
@@ -61,7 +66,8 @@ public class EscapeCar : MonoBehaviour
     {
         if (escaped) return;
 
-        if (GameManager.Instance.GetState() != GameState.EscapeSequence)
+        // only show prompt once stalker is activated
+        if (stalker == null || !stalker.activated)
         {
             if (promptUI != null) promptUI.SetActive(false);
             return;
@@ -92,7 +98,6 @@ public class EscapeCar : MonoBehaviour
 
         if (promptUI != null) promptUI.SetActive(false);
 
-        // lock out all player control
         var pm = FindObjectOfType<PlayerMovement>();
         if (pm != null) pm.enabled = false;
 
@@ -102,7 +107,6 @@ public class EscapeCar : MonoBehaviour
         var moveCamera = FindObjectOfType<MoveCamera>();
         if (moveCamera != null) moveCamera.enabled = false;
 
-        // unlock and show cursor
         Cursor.lockState = CursorLockMode.None;
         Cursor.visible = true;
 
@@ -121,16 +125,16 @@ public class EscapeCar : MonoBehaviour
             creditsCanvasGroup.alpha = 0f;
 
         yield return FadeCanvasGroup(escapeCanvasGroup, 0f, 1f, fadeInDuration);
-
         yield return new WaitForSeconds(holdBeforeCredits);
-
         yield return FadeCanvasGroup(creditsCanvasGroup, 0f, 1f, creditsFadeDuration);
 
-        // wait then quit
         yield return new WaitForSeconds(5f);
 
         Time.timeScale = 1f;
         Application.Quit();
+#if UNITY_EDITOR
+        UnityEditor.EditorApplication.isPlaying = false;
+#endif
     }
 
     IEnumerator FadeCanvasGroup(CanvasGroup cg, float from, float to, float duration)

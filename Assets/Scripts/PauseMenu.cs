@@ -5,6 +5,7 @@ public class PauseMenu : MonoBehaviour
 {
     [Header("References")]
     public GameObject pauseMenuCanvas;
+    public string mainMenuScene;
 
     bool isPaused = false;
 
@@ -45,6 +46,12 @@ public class PauseMenu : MonoBehaviour
     {
         Time.timeScale = 1f; // always reset before loading
         SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
+    }
+
+    public void MainMenu()
+    {
+        Time.timeScale = 1f;
+        SceneManager.LoadScene(mainMenuScene);
     }
 
     public void Quit()

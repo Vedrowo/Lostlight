@@ -12,6 +12,7 @@ GameObject:
   - component: {fileID: 4994839496764527598}
   - component: {fileID: 5189654882045403701}
   - component: {fileID: 361773813736908288}
+  - component: {fileID: -5838674230763066165}
   m_Layer: 0
   m_Name: SM_Rocks_08
   m_TagString: Untagged
@@ -113,3 +114,19 @@ MeshCollider:
   m_Convex: 1
   m_CookingOptions: 30
   m_Mesh: {fileID: 2148564964219237436, guid: 72265316621dece4681e00919261da6e, type: 3}
+--- !u!208 &-5838674230763066165
+NavMeshObstacle:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1418860561918544383}
+  m_Enabled: 1
+  serializedVersion: 3
+  m_Shape: 1
+  m_Extents: {x: 0.28100002, y: 0.48800004, z: 0.18200001}
+  m_MoveThreshold: 0.1
+  m_Carve: 1
+  m_CarveOnlyStationary: 1
+  m_Center: {x: 0, y: 0.48800004, z: 0}
+  m_TimeToStationary: 0.5
