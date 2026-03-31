@@ -52,8 +52,38 @@ public class PlayerMovement : MonoBehaviour
     public float crouchSpeedMultiplier = 0.45f;
     [Tooltip("Multiplier applied to player height/raycast when crouching (for ground check).")]
     public float crouchHeightMultiplier = 0.6f;
-    [Tooltip("Noise multiplier applied when crouching (lower = quieter).")]
-    public float crouchNoiseMultiplier = 0.35f;
+    [Tooltip("The camera or eye transform to lower when crouching. Assign your Camera transform here.")]
+    public Transform cameraTransform;
+    [Tooltip("Local Y position of the camera when standing.")]
+    public float standingCameraY = 0.7f;
+    [Tooltip("Local Y position of the camera when crouching.")]
+    public float crouchingCameraY = 0.1f;
+    [Tooltip("How fast the camera lerps between standing and crouching positions.")]
+    public float crouchCameraSpeed = 10f;
+
+    [Header("Audio")]
+    public AudioSource audioSource;
+    public AudioClip[] footstepSounds;
+
+    [Tooltip("Base time between footsteps")]
+    public float stepInterval = 0.5f;
+
+    [Tooltip("Sprint step speed multiplier")]
+    public float sprintStepMultiplier = 0.6f;
+
+    [Tooltip("Crouch step speed multiplier")]
+    public float crouchStepMultiplier = 1.5f;
+
+    [Tooltip("Crouch noise multiplier")]
+    public float crouchNoiseMultiplier = 0.6f;
+
+    [Tooltip("Base volume")]
+    [Range(0f, 1f)] public float baseVolume = 0.7f;
+
+    [Header("UI")]
+    public UnityEngine.UI.Slider staminaBar;
+
+    float stepTimer;
 
     public Transform orientation;
 
@@ -89,8 +119,12 @@ public class PlayerMovement : MonoBehaviour
         rb = GetComponent<Rigidbody>();
         rb.freezeRotation = true;
         currentMoveSpeed = moveSpeed;
-
         currentStamina = maxStamina;
+        if (staminaBar != null)
+        {
+            staminaBar.maxValue = maxStamina;
+            staminaBar.value = currentStamina;
+        }
     }
 
     void Update()
@@ -98,44 +132,39 @@ public class PlayerMovement : MonoBehaviour
         // Prevent player input and player-driven movement when the game is not in a playable movement state
         if (GameManager.Instance != null &&
             GameManager.Instance.currentState != GameState.Exploration &&
-            GameManager.Instance.currentState != GameState.EscapeSequence)
+            GameManager.Instance.currentState != GameState.EscapeSequence &&
+            GameManager.Instance.currentState != GameState.Chased)
         {
-            // Clear input-related flags so player does not apply forces while another system (dragging/catching/etc.) moves them.
             horizontalInput = 0f;
             verticalInput = 0f;
             isSprinting = false;
-            // keep physics and external movement intact (do not zero velocities) and skip player processing
             return;
+            
         }
 
-        float effectivePlayerHeight = playerHeight * (isCrouching ? crouchHeightMultiplier : 1f);
-        grounded = Physics.Raycast(transform.position, Vector3.down, effectivePlayerHeight * 0.5f + 0.2f, whatIsGround);
+        grounded = Physics.Raycast(transform.position, Vector3.down, playerHeight * 0.5f + 0.2f, whatIsGround);
+
         MyInput();
         SpeedControl();
+        HandleCrouchCamera();
 
-        // apply drag when grounded for tighter control
         if (grounded)
-        {
             rb.linearDamping = groundDrag;
-        }
         else
-        {
             rb.linearDamping = 0;
-        }
 
-        // check slope state for use in FixedUpdate
         onSlope = OnSlope();
 
-        // Update stamina and sprint availability
         HandleStamina();
+        HandleFootsteps();
     }
 
     private void FixedUpdate()
     {
-        // Prevent applying player-controlled forces when game state disallows player movement.
         if (GameManager.Instance != null &&
             GameManager.Instance.currentState != GameState.Exploration &&
-            GameManager.Instance.currentState != GameState.EscapeSequence)
+            GameManager.Instance.currentState != GameState.EscapeSequence &&
+            GameManager.Instance.currentState != GameState.Chased)
         {
             return;
         }
@@ -149,19 +178,29 @@ public class PlayerMovement : MonoBehaviour
         horizontalInput = Input.GetAxisRaw("Horizontal");
         verticalInput = Input.GetAxisRaw("Vertical");
 
-        // crouch is hold-to-crouch — movement is allowed while crouching, but speed and noise are reduced
+        // Hold to crouch — cannot sprint while crouching
         isCrouching = Input.GetKey(crouchKey);
 
-        // decide sprinting only if forward input and key pressed and stamina allows it and not crouching
+        // Sprinting requires: key held, forward input, not crouching, stamina available
         bool wantsToSprint = Input.GetKey(sprintKey) && verticalInput > 0f && !isCrouching;
         isSprinting = wantsToSprint && !sprintDisabledByStamina && currentStamina > minSprintStamina;
 
-        // base move speed (sprinting overrides)
-        float baseSpeed = isSprinting ? moveSpeed * sprintMultiplier : moveSpeed;
-        // apply crouch multiplier if crouching (movement still allowed)
-        currentMoveSpeed = isCrouching ? baseSpeed * crouchSpeedMultiplier : baseSpeed;
+        // Determine effective move speed
+        if (isCrouching)
+        {
+            // Crouching: reduced speed, no sprint
+            currentMoveSpeed = moveSpeed * crouchSpeedMultiplier;
+        }
+        else if (isSprinting)
+        {
+            currentMoveSpeed = moveSpeed * sprintMultiplier;
+        }
+        else
+        {
+            currentMoveSpeed = moveSpeed;
+        }
 
-        // jumping is disabled while crouching
+        // Jumping disabled while crouching
         if (Input.GetKey(jumpKey) && readyToJump && grounded && !isCrouching)
         {
             readyToJump = false;
@@ -170,25 +209,36 @@ public class PlayerMovement : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// Smoothly moves the camera transform between standing and crouching local Y positions.
+    /// Assign your Camera (or a "head" transform) to cameraTransform in the Inspector.
+    /// </summary>
+    private void HandleCrouchCamera()
+    {
+        if (cameraTransform == null) return;
+
+        float targetY = isCrouching ? crouchingCameraY : standingCameraY;
+        Vector3 localPos = cameraTransform.localPosition;
+        localPos.y = Mathf.Lerp(localPos.y, targetY, Time.deltaTime * crouchCameraSpeed);
+        cameraTransform.localPosition = localPos;
+    }
+
     private void MovePlayer()
     {
+        Debug.Log($"MoveSpeed: {currentMoveSpeed} | Input: ({horizontalInput}, {verticalInput}) | Velocity: {rb.linearVelocity.magnitude} | Crouching: {isCrouching}");
         moveDirection = orientation.forward * verticalInput + orientation.right * horizontalInput;
 
-        // if on a walkable slope, project movement onto slope plane so player moves along slope
         if (grounded && onSlope && moveDirection.sqrMagnitude > 0f)
         {
-            // ensure we have a slopeMoveDirection calculated
             slopeMoveDirection = Vector3.ProjectOnPlane(moveDirection, slopeHit.normal).normalized;
-
             rb.AddForce(slopeMoveDirection * currentMoveSpeed * 10f, ForceMode.Force);
-            // push player slightly downward so they don't "float" on slopes
             rb.AddForce(Vector3.down * slopeDownForce, ForceMode.Force);
         }
         else if (grounded)
         {
             rb.AddForce(moveDirection.normalized * currentMoveSpeed * 10f, ForceMode.Force);
         }
-        else // in air
+        else
         {
             rb.AddForce(moveDirection.normalized * currentMoveSpeed * 10f * airMultiplier, ForceMode.Force);
         }
@@ -198,7 +248,6 @@ public class PlayerMovement : MonoBehaviour
     {
         Vector3 flatVel = new Vector3(rb.linearVelocity.x, 0f, rb.linearVelocity.z);
 
-        // use currentMoveSpeed (so sprinting increases the cap)
         if (flatVel.magnitude > currentMoveSpeed)
         {
             Vector3 limitedVel = flatVel.normalized * currentMoveSpeed;
@@ -217,7 +266,6 @@ public class PlayerMovement : MonoBehaviour
         readyToJump = true;
     }
 
-    // returns true when the surface beneath is a slope within the allowed angle
     private bool OnSlope()
     {
         if (!grounded) return false;
@@ -226,14 +274,12 @@ public class PlayerMovement : MonoBehaviour
         if (Physics.Raycast(transform.position, Vector3.down, out slopeHit, checkDistance, whatIsGround))
         {
             float angle = Vector3.Angle(Vector3.up, slopeHit.normal);
-            // allow walking on slopes up to maxSlopeAngle (exclusive of perfectly flat)
             return angle > 0f && angle <= maxSlopeAngle;
         }
 
         return false;
     }
 
-    // gently damp horizontal velocity when no input is provided to reduce sliding and feel snappier
     private void ApplyStopDamping()
     {
         if (grounded && Mathf.Abs(horizontalInput) < 0.01f && Mathf.Abs(verticalInput) < 0.01f)
@@ -246,7 +292,6 @@ public class PlayerMovement : MonoBehaviour
         }
     }
 
-    // handle stamina drain/regen and disable sprinting if empty
     private void HandleStamina()
     {
         if (isSprinting && verticalInput > 0f)
@@ -263,13 +308,10 @@ public class PlayerMovement : MonoBehaviour
         }
         else
         {
-            // if recently fully depleted, delay regen by staminaCooldown
             if (sprintDisabledByStamina)
             {
                 if (Time.time >= staminaDepletedTime + staminaCooldown)
-                {
                     sprintDisabledByStamina = false;
-                }
             }
 
             if (!sprintDisabledByStamina)
@@ -277,6 +319,48 @@ public class PlayerMovement : MonoBehaviour
                 currentStamina += staminaRegenRate * Time.deltaTime;
                 currentStamina = Mathf.Clamp(currentStamina, 0f, maxStamina);
             }
+        }
+        if (staminaBar != null)
+        {
+            staminaBar.value = Mathf.Lerp(staminaBar.value, currentStamina, Time.deltaTime * 10f);
+        }
+    }
+
+    private void HandleFootsteps()
+    {
+        Vector3 flatVel = new Vector3(rb.linearVelocity.x, 0f, rb.linearVelocity.z);
+        bool isMoving = flatVel.magnitude > 0.1f;
+
+        if (!grounded || !isMoving)
+        {
+            stepTimer = 0f;
+            return;
+        }
+
+        float currentStepInterval = stepInterval;
+
+        if (isSprinting && currentStamina > 1)
+            currentStepInterval *= sprintStepMultiplier;
+        else if (isCrouching)
+            currentStepInterval *= crouchStepMultiplier;
+
+        stepTimer += Time.deltaTime;
+
+        if (stepTimer >= currentStepInterval)
+        {
+            float volume = baseVolume;
+
+            if (isSprinting)
+                volume *= 1.2f;
+            else if (isCrouching)
+                volume *= crouchNoiseMultiplier;
+
+            if (footstepSounds.Length == 0) return;
+
+            AudioClip clip = footstepSounds[Random.Range(0, footstepSounds.Length)];
+            audioSource.PlayOneShot(clip, volume);
+
+            stepTimer = 0f;
         }
     }
 }

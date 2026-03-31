@@ -4,6 +4,7 @@ public enum GameState
 {
     Exploration,
     Chased,
+    StalkerSearching,
     Caught,
     Dragging,
     Blackout,
@@ -17,12 +18,13 @@ public class GameManager : MonoBehaviour
     public bool hasBeenCaught = false;
     public static GameManager Instance;
     public GameState currentState = GameState.Exploration;
+    public AudioManager audioManager;
 
     [Header("Time of Day")]
     [Tooltip("Starting time in Exploration.")]
-    public float explorationStartTime = 13f;
+    public float explorationStartTime = 15f;
     [Tooltip("Maximum time during Exploration — cycle stops here.")]
-    public float explorationMaxTime = 17.5f;
+    public float explorationMaxTime = 24f;
     [Tooltip("Time set when player wakes up after being caught.")]
     public float nightTime = 24f;
     [Tooltip("How long the day-to-night transition takes in seconds.")]
@@ -95,6 +97,15 @@ public class GameManager : MonoBehaviour
                 case GameState.Escaped:
                     break;
             }
+        }
+
+        if (AudioManager.Instance != null &&
+        (newState == GameState.Exploration ||
+        newState == GameState.Chased ||
+        newState == GameState.EscapeSequence ||
+        newState == GameState.StalkerSearching))
+        {
+            AudioManager.Instance.UpdateAmbience(newState);
         }
     }
 

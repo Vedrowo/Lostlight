@@ -94,6 +94,12 @@ public class StalkerMove : MonoBehaviour
     [Tooltip("How long the prompt stays on screen.")]
     public float promptDuration = 3f;
 
+    [Header("Audio")]
+    public AudioSource audioSource;
+    public AudioClip[] footstepSounds;
+    public float stepInterval = 0.5f;
+    [Range(0f, 1f)] public float footstepVolume = 0.8f;
+
     [Header("Debug")]
     [Tooltip("Enable to print activation/visibility debug info to the Console and draw the sight ray.")]
     public bool verboseActivationDebug = false;
@@ -102,14 +108,14 @@ public class StalkerMove : MonoBehaviour
     bool isChasing;
     Transform currentTarget;
     float lastAttackTime;
-
+    private GameState previousState;
     float searchTimer;
     bool isSearching;
-
     bool hasBeenSeenByPlayer = false;
     bool lastPlayerCanSee = false;
     float playerSeeTimer = 0f;
     float playerLookAwayTimer = 0f;
+    private float stepTimer;
 
     int currentDynamicPatrolIndex = -1;
     List<int> currentNearbyPatrolIndices = new List<int>();
@@ -267,6 +273,7 @@ public class StalkerMove : MonoBehaviour
             DoPatrolNearPlayer(playerTransform);
 
         UpdateAnimation();
+        HandleFootsteps();
     }
 
     public void Activate()
@@ -338,12 +345,29 @@ public class StalkerMove : MonoBehaviour
 
         if (canSee || canHear)
         {
+            if (!isChasing)
+            {
+                GameState currentState = GameManager.Instance.GetState();
+                if (currentState != GameState.Chased)
+                {
+                    previousState = currentState;
+                    GameManager.Instance.SetState(GameState.Chased);
+                }
+            }
             isChasing = true;
             isSearching = false;
             currentTarget = target;
         }
         else if (isChasing && Time.time > lastSeenTime + chasePersistence)
         {
+            if (!isSearching)
+            {
+                GameState currentState = GameManager.Instance.GetState();
+                if (currentState != GameState.Chased)
+                {
+                    GameManager.Instance.SetState(GameState.StalkerSearching);
+                }
+            }
             currentTarget = null;
             isSearching = true;
             searchTimer = 0f;
@@ -435,6 +459,11 @@ public class StalkerMove : MonoBehaviour
 
         if (Time.time > lastSeenTime + chasePersistence)
         {
+            if (isChasing || isSearching)
+            {
+                GameManager.Instance.SetState(previousState);
+            }
+
             isChasing = false;
             isSearching = false;
             currentTarget = null;
@@ -644,5 +673,38 @@ public class StalkerMove : MonoBehaviour
     {
         if (animator == null || string.IsNullOrEmpty(runParamName)) return;
         animator.SetBool(runParamName, isChasing && !agent.isStopped);
+    }
+
+    void HandleFootsteps()
+    {
+        // Check if the agent is actually moving on the NavMesh
+        bool isMoving = agent.velocity.magnitude > 0.1f && agent.remainingDistance > agent.stoppingDistance;
+
+        if (!isMoving)
+        {
+            stepTimer = 0f;
+            return;
+        }
+
+        // Adjust step speed based on whether it's chasing or patrolling
+        float currentStepInterval = stepInterval;
+        if (isChasing)
+            currentStepInterval *= 0.7f; // Steps are 30% faster when chasing
+
+        stepTimer += Time.deltaTime;
+
+        if (stepTimer >= currentStepInterval)
+        {
+            if (footstepSounds.Length > 0 && audioSource != null)
+            {
+                AudioClip clip = footstepSounds[Random.Range(0, footstepSounds.Length)];
+
+                // Higher pitch during chase makes it sound more frantic/terrifying
+                audioSource.pitch = isChasing ? 1.2f : 1.0f;
+                audioSource.PlayOneShot(clip, footstepVolume);
+            }
+
+            stepTimer = 0f;
+        }
     }
 }
