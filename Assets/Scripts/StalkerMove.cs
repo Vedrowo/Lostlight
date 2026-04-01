@@ -34,7 +34,7 @@ public class StalkerMove : MonoBehaviour
     public float searchPointInterval = 1.2f;
 
     [Header("Patrol (dynamic around player)")]
-    [Tooltip("All global candidate patrol points (place these on your road).")]
+    [Tooltip("All global candidate patrol points.")]
     public Transform[] patrolPoints;
     [Tooltip("When patrolling, only use patrol points within this radius of the player.")]
     public float patrolRadiusAroundPlayer = 30f;
@@ -52,6 +52,7 @@ public class StalkerMove : MonoBehaviour
 
     [Header("Animator")]
     public Animator animator;
+    public string walkParamName = "isWalking";
     public string runParamName = "isRunning";
     public string attackBoolName = "isAttacking";
     public string triggeredBoolName = "isTriggered";
@@ -63,6 +64,22 @@ public class StalkerMove : MonoBehaviour
     [Tooltip("If true, the stalker will only search for targets after Activate() is called.")]
     public bool requireActivation = true;
     public bool activated = false;
+
+    [Header("Flashlight")]
+    public Light flashlightSpotlight;
+
+    [Header("Flashlight Stun")]
+    public bool canBeStunned = true;
+    public float stunBuildTime = 0.8f;
+    public float stunDecayTime = 1.2f;
+    public float stunDuration = 2.5f;
+    public float stunAngle = 25f;
+    public float stunMaxDistance = 20f;
+    public float stunDurationRequired = 0.8f;
+
+    float stunTimer = 0f;
+    bool isStunned = false;
+    float stunEndTime = 0f;
 
     [Header("Player-activation options")]
     [Tooltip("If true the stalker will auto-activate when the player first sees it and then looks away.")]
@@ -100,19 +117,15 @@ public class StalkerMove : MonoBehaviour
     public float stepInterval = 0.5f;
     [Range(0f, 1f)] public float footstepVolume = 0.8f;
 
-    [Header("Debug")]
-    [Tooltip("Enable to print activation/visibility debug info to the Console and draw the sight ray.")]
-    public bool verboseActivationDebug = false;
-
     NavMeshAgent agent;
     bool isChasing;
+    bool isAttacking = false;
     Transform currentTarget;
     float lastAttackTime;
     private GameState previousState;
     float searchTimer;
     bool isSearching;
     bool hasBeenSeenByPlayer = false;
-    bool lastPlayerCanSee = false;
     float playerSeeTimer = 0f;
     float playerLookAwayTimer = 0f;
     private float stepTimer;
@@ -120,7 +133,6 @@ public class StalkerMove : MonoBehaviour
     int currentDynamicPatrolIndex = -1;
     List<int> currentNearbyPatrolIndices = new List<int>();
 
-    // cached player transform — refreshed only when null
     Transform playerTransformCached;
 
     void Start()
@@ -147,7 +159,6 @@ public class StalkerMove : MonoBehaviour
 
     void Update()
     {
-        // refresh cached player transform only when lost
         if (playerTransformCached == null)
         {
             var pgo = GameObject.FindGameObjectWithTag(targetTag);
@@ -155,6 +166,8 @@ public class StalkerMove : MonoBehaviour
         }
 
         Transform playerTransform = playerTransformCached;
+
+        HandleFlashlightStun(playerTransform);
 
         // Activation logic
         if (!activated && requireActivation && playerTransform != null)
@@ -186,30 +199,15 @@ public class StalkerMove : MonoBehaviour
                         : Physics.Raycast(camPos, dirNorm, out hit, distToStalker, playerVisionMask);
 
                     playerCanSee = !blocked;
-
-                    if (verboseActivationDebug)
-                    {
-                        Debug.DrawRay(camPos, dirNorm * distToStalker, playerCanSee ? Color.green : Color.red, 0.15f);
-                        if (playerCanSee != lastPlayerCanSee)
-                        {
-                            string hitName = hit.collider != null ? hit.collider.name : "none";
-                            Debug.Log($"[StalkerDebug] '{gameObject.name}': playerCanSee={playerCanSee} dist={playerDist:F1} angle={angle:F1} blocked={blocked} hit={hitName}");
-                        }
-                    }
                 }
 
                 if (playerCanSee)
                 {
-                    // accumulate sight time
                     playerSeeTimer += Time.deltaTime;
                     playerLookAwayTimer = 0f;
                     if (playerSeeTimer >= requiredSightTime)
                     {
                         hasBeenSeenByPlayer = true;
-                        lastPlayerCanSee = true;
-
-                        if (verboseActivationDebug)
-                            Debug.Log($"[StalkerDebug] '{gameObject.name}' registered sight (timer={playerSeeTimer:F2})");
                     }
                 }
                 else
@@ -223,23 +221,17 @@ public class StalkerMove : MonoBehaviour
 
                         if (walkedOutOfRange || lookedAway)
                         {
-                            // walked out of sight range while watching, OR turned away — start timer
                             playerLookAwayTimer += Time.deltaTime;
                             if (playerLookAwayTimer >= requiredLookAwayTime)
                             {
-                                if (verboseActivationDebug)
-                                    Debug.Log($"[StalkerDebug] '{gameObject.name}' triggered (walkedOut={walkedOutOfRange} lookedAway={lookedAway}) -> Activate()");
                                 Activate();
                             }
                         }
                         else
                         {
-                            // blocked by geometry only — reset timer, don't penalise
                             playerLookAwayTimer = 0f;
                         }
                     }
-
-                    lastPlayerCanSee = false;
                 }
             }
         }
@@ -258,6 +250,12 @@ public class StalkerMove : MonoBehaviour
                 currentDynamicPatrolIndex = -1;
             }
 
+            UpdateAnimation();
+            return;
+        }
+
+        if (isStunned)
+        {
             UpdateAnimation();
             return;
         }
@@ -284,8 +282,17 @@ public class StalkerMove : MonoBehaviour
         if (agent != null)
             agent.isStopped = false;
 
-        if (animator != null && !string.IsNullOrEmpty(triggeredBoolName))
-            animator.SetBool(triggeredBoolName, true);
+        if (animator != null)
+        {
+            if (!string.IsNullOrEmpty(triggeredBoolName))
+                animator.SetBool(triggeredBoolName, true);
+
+            // Start walking immediately on activation
+            if (!string.IsNullOrEmpty(walkParamName))
+                animator.SetBool(walkParamName, true);
+            if (!string.IsNullOrEmpty(runParamName))
+                animator.SetBool(runParamName, false);
+        }
 
         if (activationPromptUI != null)
             StartCoroutine(ShowPrompt());
@@ -364,9 +371,7 @@ public class StalkerMove : MonoBehaviour
             {
                 GameState currentState = GameManager.Instance.GetState();
                 if (currentState != GameState.Chased)
-                {
-                    GameManager.Instance.SetState(GameState.StalkerSearching);
-                }
+                    GameManager.Instance.SetState(previousState);
             }
             currentTarget = null;
             isSearching = true;
@@ -426,7 +431,7 @@ public class StalkerMove : MonoBehaviour
         }
 
         // attack
-        if (currentTarget != null && Time.time >= lastAttackTime + attackCooldown)
+        if (currentTarget != null && Time.time >= lastAttackTime + attackCooldown && !isAttacking)
         {
             float dist = Vector3.Distance(transform.position, currentTarget.position);
             if (dist <= attackStartRange)
@@ -460,9 +465,7 @@ public class StalkerMove : MonoBehaviour
         if (Time.time > lastSeenTime + chasePersistence)
         {
             if (isChasing || isSearching)
-            {
                 GameManager.Instance.SetState(previousState);
-            }
 
             isChasing = false;
             isSearching = false;
@@ -473,21 +476,20 @@ public class StalkerMove : MonoBehaviour
 
     IEnumerator AttackRoutine(Transform target)
     {
-        if (target == null) yield break;
+        if (target == null || isStunned) yield break;
 
+        isAttacking = true;
         agent.isStopped = true;
 
         if (animator != null)
-        {
             animator.SetBool(attackBoolName, true);
-        }
 
         float timer = 0f;
         bool hitLanded = false;
 
         while (timer < attackLockDuration)
         {
-            if (target == null) yield break;
+            if (target == null) { isAttacking = false; yield break; }
 
             Vector3 dir = target.position - transform.position;
             dir.y = 0;
@@ -506,7 +508,6 @@ public class StalkerMove : MonoBehaviour
             yield return null;
         }
 
-        // fallback hit if the loop ended without landing one
         if (!hitLanded)
         {
             float finalDist = Vector3.Distance(transform.position, target.position);
@@ -520,13 +521,14 @@ public class StalkerMove : MonoBehaviour
 
         if (animator != null)
             animator.SetBool(attackBoolName, false);
+
+        isAttacking = false;
     }
 
     void TryKillTarget(Transform target)
     {
         if (target == null) return;
 
-        // block during any cinematic or end state
         var state = GameManager.Instance.GetState();
         if (state == GameState.Caught ||
             state == GameState.Dragging ||
@@ -540,7 +542,6 @@ public class StalkerMove : MonoBehaviour
 
         if (ph == null)
         {
-            // last resort: find via tag in case hierarchy is split
             var playerGO = GameObject.FindGameObjectWithTag(targetTag);
             if (playerGO != null)
                 ph = playerGO.GetComponent<PlayerHealth>() ?? playerGO.GetComponentInChildren<PlayerHealth>();
@@ -548,7 +549,6 @@ public class StalkerMove : MonoBehaviour
 
         if (ph == null) return;
 
-        // first capture
         if (!GameManager.Instance.hasBeenCaught)
         {
             GameManager.Instance.hasBeenCaught = true;
@@ -557,9 +557,7 @@ public class StalkerMove : MonoBehaviour
             return;
         }
 
-        // subsequent hits: normal death
-        Debug.Log("[Stalker] Calling ph.Die()");
-        ph.Die();
+        ph.TakeDamage(1);
     }
 
     public void ReturnToPatrol(Vector3 worldPosition)
@@ -579,15 +577,19 @@ public class StalkerMove : MonoBehaviour
         activated = true;
         isChasing = false;
         isSearching = false;
+        isAttacking = false;
         currentTarget = null;
         hasBeenSeenByPlayer = false;
-        lastPlayerCanSee = false;
         playerSeeTimer = 0f;
         playerLookAwayTimer = 0f;
         killOnAttack = true;
 
         if (animator != null)
+        {
             animator.SetBool(attackBoolName, false);
+            animator.SetBool(runParamName, false);
+            animator.SetBool(walkParamName, true); // back to walking on patrol
+        }
 
         Debug.Log($"Stalker '{gameObject.name}' returned to patrol at {worldPosition}");
     }
@@ -602,7 +604,6 @@ public class StalkerMove : MonoBehaviour
             return;
         }
 
-        // if current destination drifted out of range, pick a new point immediately
         if (currentDynamicPatrolIndex >= 0 && playerTransform != null)
         {
             float distFromPlayer = Vector3.Distance(playerTransform.position, patrolPoints[currentDynamicPatrolIndex].position);
@@ -613,7 +614,6 @@ public class StalkerMove : MonoBehaviour
             }
         }
 
-        // build nearby list
         currentNearbyPatrolIndices.Clear();
         if (playerTransform != null)
         {
@@ -626,7 +626,6 @@ public class StalkerMove : MonoBehaviour
             }
         }
 
-        // fallback to all points if none are near player
         if (currentNearbyPatrolIndices.Count == 0)
         {
             for (int i = 0; i < patrolPoints.Length; i++)
@@ -634,7 +633,6 @@ public class StalkerMove : MonoBehaviour
                     currentNearbyPatrolIndices.Add(i);
         }
 
-        // pick initial point
         if (currentDynamicPatrolIndex < 0 && currentNearbyPatrolIndices.Count > 0)
         {
             currentDynamicPatrolIndex = currentNearbyPatrolIndices[Random.Range(0, currentNearbyPatrolIndices.Count)];
@@ -671,13 +669,36 @@ public class StalkerMove : MonoBehaviour
 
     void UpdateAnimation()
     {
-        if (animator == null || string.IsNullOrEmpty(runParamName)) return;
-        animator.SetBool(runParamName, isChasing && !agent.isStopped);
+        if (animator == null) return;
+
+        animator.SetBool("isStunned", isStunned);
+
+        if (isStunned)
+        {
+            if (!string.IsNullOrEmpty(walkParamName)) animator.SetBool(walkParamName, false);
+            if (!string.IsNullOrEmpty(runParamName)) animator.SetBool(runParamName, false);
+            if (!string.IsNullOrEmpty(attackBoolName)) animator.SetBool(attackBoolName, false);
+            return;
+        }
+
+        bool isMoving = agent.velocity.magnitude > 0.1f && !agent.isStopped;
+
+        if (isChasing)
+        {
+            // chasing — run, don't walk
+            if (!string.IsNullOrEmpty(walkParamName)) animator.SetBool(walkParamName, false);
+            if (!string.IsNullOrEmpty(runParamName)) animator.SetBool(runParamName, isMoving);
+        }
+        else
+        {
+            // patrolling / searching — walk, don't run
+            if (!string.IsNullOrEmpty(runParamName)) animator.SetBool(runParamName, false);
+            if (!string.IsNullOrEmpty(walkParamName)) animator.SetBool(walkParamName, isMoving);
+        }
     }
 
     void HandleFootsteps()
     {
-        // Check if the agent is actually moving on the NavMesh
         bool isMoving = agent.velocity.magnitude > 0.1f && agent.remainingDistance > agent.stoppingDistance;
 
         if (!isMoving)
@@ -686,10 +707,9 @@ public class StalkerMove : MonoBehaviour
             return;
         }
 
-        // Adjust step speed based on whether it's chasing or patrolling
         float currentStepInterval = stepInterval;
         if (isChasing)
-            currentStepInterval *= 0.7f; // Steps are 30% faster when chasing
+            currentStepInterval *= 0.7f;
 
         stepTimer += Time.deltaTime;
 
@@ -698,13 +718,106 @@ public class StalkerMove : MonoBehaviour
             if (footstepSounds.Length > 0 && audioSource != null)
             {
                 AudioClip clip = footstepSounds[Random.Range(0, footstepSounds.Length)];
-
-                // Higher pitch during chase makes it sound more frantic/terrifying
                 audioSource.pitch = isChasing ? 1.2f : 1.0f;
                 audioSource.PlayOneShot(clip, footstepVolume);
             }
 
             stepTimer = 0f;
+        }
+    }
+
+    void HandleFlashlightStun(Transform playerTransform)
+    {
+        if (!canBeStunned || playerTransform == null || flashlightSpotlight == null) return;
+
+        if (isStunned)
+        {
+            if (Time.time >= stunEndTime)
+            {
+                isStunned = false;
+                stunTimer = 0f;
+
+                isChasing = false;
+                isSearching = false;
+                isAttacking = false;
+                currentTarget = null;
+                lastSeenTime = -999f;
+
+                if (agent != null)
+                    agent.isStopped = false;
+
+                lastAttackTime = Time.time + 1.5f;
+
+                if (animator != null)
+                {
+                    animator.SetBool("isStunned", false);
+                    animator.SetBool(runParamName, false);
+                    animator.SetBool(walkParamName, true); // resume walking after stun
+                }
+
+                GameManager.Instance.SetState(previousState);
+                Debug.Log("Stalker recovered from stun.");
+            }
+            return;
+        }
+
+        if (flashlightSpotlight.enabled)
+        {
+            Vector3 lightOrigin = flashlightSpotlight.transform.position;
+            Vector3 stalkerTarget = transform.position + Vector3.up * eyeHeight;
+            Vector3 directionToStalker = (stalkerTarget - lightOrigin).normalized;
+            float distance = Vector3.Distance(lightOrigin, stalkerTarget);
+            float angleToStalker = Vector3.Angle(flashlightSpotlight.transform.forward, directionToStalker);
+
+            if (angleToStalker < flashlightSpotlight.spotAngle / 2f && distance <= stunMaxDistance)
+            {
+                if (!Physics.Raycast(lightOrigin, directionToStalker, distance, obstacleMask))
+                {
+                    stunTimer += Time.deltaTime;
+
+                    if (stunTimer >= stunDurationRequired)
+                    {
+                        TriggerStun();
+                        stunTimer = 0f;
+                    }
+                    return;
+                }
+            }
+        }
+
+        if (stunTimer > 0)
+        {
+            stunTimer -= Time.deltaTime * stunDecayTime;
+            stunTimer = Mathf.Max(stunTimer, 0);
+        }
+    }
+
+    void TriggerStun()
+    {
+        isStunned = true;
+        stunEndTime = Time.time + stunDuration;
+
+        StopAllCoroutines();
+
+        isChasing = false;
+        isSearching = false;
+        isAttacking = false;
+        currentTarget = null;
+        lastSeenTime = -999f;
+
+        if (agent != null)
+        {
+            agent.isStopped = true;
+            agent.ResetPath();
+            agent.velocity = Vector3.zero;
+        }
+
+        if (animator != null)
+        {
+            animator.SetBool(attackBoolName, false);
+            animator.SetBool(runParamName, false);
+            animator.SetBool(walkParamName, false);
+            animator.SetTrigger("stunned");
         }
     }
 }

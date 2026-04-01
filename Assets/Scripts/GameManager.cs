@@ -103,7 +103,7 @@ public class GameManager : MonoBehaviour
         (newState == GameState.Exploration ||
         newState == GameState.Chased ||
         newState == GameState.EscapeSequence ||
-        newState == GameState.StalkerSearching))
+        newState == GameState.Dragging))
         {
             AudioManager.Instance.UpdateAmbience(newState);
         }

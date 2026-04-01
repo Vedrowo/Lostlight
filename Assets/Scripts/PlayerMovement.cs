@@ -209,10 +209,6 @@ public class PlayerMovement : MonoBehaviour
         }
     }
 
-    /// <summary>
-    /// Smoothly moves the camera transform between standing and crouching local Y positions.
-    /// Assign your Camera (or a "head" transform) to cameraTransform in the Inspector.
-    /// </summary>
     private void HandleCrouchCamera()
     {
         if (cameraTransform == null) return;
@@ -225,7 +221,6 @@ public class PlayerMovement : MonoBehaviour
 
     private void MovePlayer()
     {
-        Debug.Log($"MoveSpeed: {currentMoveSpeed} | Input: ({horizontalInput}, {verticalInput}) | Velocity: {rb.linearVelocity.magnitude} | Crouching: {isCrouching}");
         moveDirection = orientation.forward * verticalInput + orientation.right * horizontalInput;
 
         if (grounded && onSlope && moveDirection.sqrMagnitude > 0f)

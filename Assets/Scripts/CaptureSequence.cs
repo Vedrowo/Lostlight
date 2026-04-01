@@ -24,7 +24,9 @@ public class CaptureSequence : MonoBehaviour
     public float groundCameraHeight = 0.12f;
 
     [Header("Getting up")]
-    public float getUpDuration = 2.2f;
+    public float getUpDuration = 3.0f;
+    [Tooltip("How long the player lies still before starting to get up.")]
+    public float lyingStillDuration = 0.6f;
 
     [Header("Vignette")]
     public Volume globalVolume;
@@ -39,6 +41,7 @@ public class CaptureSequence : MonoBehaviour
     Canvas overlayCanvas;
     Image overlayImage;
     bool running;
+    float t = 0f;
 
     // cached references — populated in Awake to avoid mid-coroutine FindObjectOfType calls
     PlayerCam playerCamComp;
@@ -136,6 +139,20 @@ public class CaptureSequence : MonoBehaviour
         // --- Disable player ---
         var pm = playerRoot.GetComponent<PlayerMovement>();
         if (pm != null) pm.enabled = false;
+
+        // --- Teleport stalker immediately so he's gone before drag plays ---
+        if (stalker != null && haveStalkerDestination)
+        {
+            var stalkerMove = stalker.GetComponent<StalkerMove>();
+            if (stalkerMove != null)
+                stalkerMove.ReturnToPatrol(finalStalkerPos);
+            else
+            {
+                var agent = stalker.GetComponent<UnityEngine.AI.NavMeshAgent>();
+                if (agent != null) { agent.Warp(finalStalkerPos); agent.ResetPath(); agent.isStopped = false; }
+                else stalker.position = finalStalkerPos;
+            }
+        }
 
         // use cached camera references; re-find only if null (e.g. scene reload)
         if (playerCamComp == null) playerCamComp = FindObjectOfType<PlayerCam>();
@@ -249,25 +266,49 @@ public class CaptureSequence : MonoBehaviour
             yield return null;
         }
 
+        // --- END OF DRAG ---
         ClearVignette();
 
-        // --- Fade to black before teleport ---
+        // FULL blackout
         yield return Fade(0f, 1f, fadeDuration);
 
-        // --- Teleport player ---
+        // Stay unconscious (this is what was missing!)
+        yield return new WaitForSeconds(2.2f); // tweak 1.5–3.5 for feel
+
+        // --- TELEPORT WHILE SCREEN IS BLACK ---
         Vector3 wakePosition = finalWakePos;
+
         if (Physics.Raycast(wakePosition + Vector3.up * 5f, Vector3.down, out RaycastHit groundHit, 20f))
             wakePosition.y = groundHit.point.y + 0.02f;
 
-        if (rb != null) { rb.linearVelocity = Vector3.zero; rb.angularVelocity = Vector3.zero; }
+        // Reset physics
+        if (rb != null)
+        {
+            rb.linearVelocity = Vector3.zero;
+            rb.angularVelocity = Vector3.zero;
+        }
 
-        if (cc != null) { cc.enabled = false; playerRoot.position = wakePosition; cc.enabled = true; }
-        else if (rb != null) { rb.position = wakePosition; }
-        else { playerRoot.position = wakePosition; }
+        // Move player safely
+        if (cc != null)
+        {
+            cc.enabled = false;
+            playerRoot.position = wakePosition;
+            cc.enabled = true;
+        }
+        else if (rb != null)
+        {
+            rb.position = wakePosition;
+        }
+        else
+        {
+            playerRoot.position = wakePosition;
+        }
 
+        // Reset player rotation
         float wakeYaw = camOriginalRotation.eulerAngles.y;
         Quaternion uprightRotation = Quaternion.Euler(0f, wakeYaw, 0f);
         playerRoot.rotation = uprightRotation;
+
         if (rb != null)
         {
             rb.rotation = uprightRotation;
@@ -275,78 +316,123 @@ public class CaptureSequence : MonoBehaviour
             rb.constraints = originalConstraints;
         }
 
-        // snap camera holder to CameraPos on player
+        // --- CAMERA SETUP (STILL BLACK SCREEN) ---
         Transform cameraPosTarget = playerRoot.Find("CameraPos");
-        if (cameraPosTarget != null && cameraHolder != null)
-            cameraHolder.position = cameraPosTarget.position;
-        else if (cameraHolder != null)
-            cameraHolder.position = wakePosition + Vector3.up * 1.6f;
+
+        Vector3 groundCamPos = wakePosition;
+        if (Physics.Raycast(wakePosition + Vector3.up * 2f, Vector3.down, out RaycastHit wakeFloor, 10f))
+            groundCamPos.y = wakeFloor.point.y + groundCameraHeight;
+
+        Vector3 standingCamPos = cameraPosTarget != null
+            ? cameraPosTarget.position
+            : wakePosition + Vector3.up * 1.6f;
+
+        // Rotations
+        Quaternion lyingRot = Quaternion.Euler(-70f, wakeYaw, 0f);
+        Quaternion elbowRot = Quaternion.Euler(-45f, wakeYaw, 0f);
+        Quaternion standingRot = Quaternion.Euler(0f, wakeYaw, 0f);
+
+        // Start fully lying down BEFORE fade-in
+        if (cameraHolder != null)
+            cameraHolder.position = groundCamPos;
 
         if (camTf != null)
-        {
-            Quaternion lookUpAtNewPos = Quaternion.Euler(-75f, wakeYaw, 0f);
-            camTf.rotation = lookUpAtNewPos;
-            if (playerCamComp != null) playerCamComp.SetRotation(lookUpAtNewPos);
-        }
+            camTf.rotation = lyingRot;
 
-        // --- Teleport stalker ---
-        if (stalker != null && haveStalkerDestination)
-        {
-            var stalkerMove = stalker.GetComponent<StalkerMove>();
-            if (stalkerMove != null)
-                stalkerMove.ReturnToPatrol(finalStalkerPos);
-            else
-            {
-                var agent = stalker.GetComponent<UnityEngine.AI.NavMeshAgent>();
-                if (agent != null) { agent.Warp(finalStalkerPos); agent.ResetPath(); agent.isStopped = false; }
-                else stalker.position = finalStalkerPos;
-            }
-        }
+        // --- WAKE UP (FADE IN) ---
+        yield return Fade(1f, 0f, fadeDuration);
 
-        ClearVignette();
+        // Disorientation pause
+        yield return new WaitForSeconds(0.8f);
 
-        // --- Getting up ---
+        // --- GET UP ANIMATION (CLEAN REWRITE) ---
         if (gm != null) gm.SetState(GameState.GettingUp);
 
-        float getUpElapsed = 0f;
-        Quaternion startCamRot = camTf != null ? camTf.rotation : Quaternion.identity;
-        Quaternion targetCamRot = Quaternion.Euler(0f, wakeYaw, 0f);
+        Vector3 startPos = cameraHolder.position;
+        Vector3 endPos = cameraPosTarget != null
+            ? cameraPosTarget.position
+            : playerRoot.position + Vector3.up * 1.6f;
 
-        while (getUpElapsed < getUpDuration)
+        // Clamp start position so we NEVER go into ground
+        float minHeight = playerRoot.position.y + 0.15f;
+        if (startPos.y < minHeight)
+            startPos.y = minHeight;
+
+
+        float startPitch = -70f;   // lying on back
+        float midPitch = -30f;   // elbows
+        float endPitch = 0f;    // standing
+
+        if (camTf != null)
+            camTf.rotation = Quaternion.Euler(startPitch, wakeYaw, 0f);
+
+        if (cameraHolder != null)
+            cameraHolder.position = startPos;
+
+        // Small delay (feels like regaining consciousness)
+        yield return new WaitForSeconds(0.6f);
+
+        // Animation
+       
+
+        while (t < getUpDuration)
         {
-            float p = Mathf.SmoothStep(0f, 1f, getUpElapsed / getUpDuration);
+            float p = t / getUpDuration;
+            p = Mathf.SmoothStep(0f, 1f, p);
 
-            if (camTf != null)
+            // --- POSITION ---
+            Vector3 pos = Vector3.Lerp(startPos, endPos, p);
+
+            // slight forward motion (feels like sitting up)
+            pos += playerRoot.forward * Mathf.Lerp(0f, 0.25f, p);
+
+            cameraHolder.position = pos;
+
+            // --- ROTATION (NO QUATERNION BLENDING) ---
+            float pitch;
+
+            if (p < 0.5f)
             {
-                Quaternion q = Quaternion.Slerp(startCamRot, targetCamRot, p);
-                camTf.rotation = q;
-                if (playerCamComp != null) playerCamComp.SetRotation(q);
+                // Phase 1: lying → elbows
+                float phase = p / 0.5f;
+                pitch = Mathf.Lerp(startPitch, midPitch, phase);
+            }
+            else
+            {
+                // Phase 2: elbows → standing
+                float phase = (p - 0.5f) / 0.5f;
+                pitch = Mathf.Lerp(midPitch, endPitch, phase);
             }
 
-            if (cameraPosTarget != null && cameraHolder != null)
-                cameraHolder.position = cameraPosTarget.position;
+            camTf.rotation = Quaternion.Euler(pitch, wakeYaw, 0f);
 
-            getUpElapsed += Time.deltaTime;
+            t += Time.deltaTime;
             yield return null;
         }
 
+        // Snap final position/rotation
+        if (cameraHolder != null)
+            cameraHolder.position = endPos;
+
         if (camTf != null)
-        {
-            camTf.rotation = targetCamRot;
-            if (playerCamComp != null) playerCamComp.SetRotation(targetCamRot);
-        }
+            camTf.rotation = Quaternion.Euler(0f, wakeYaw, 0f);
 
-        // --- Restore ---
+        // --- RESTORE CONTROL ---
         if (gm != null) gm.SetState(GameState.EscapeSequence);
-
-        ClearVignette();
 
         if (rb != null) rb.angularVelocity = Vector3.zero;
         if (pm != null) pm.enabled = true;
-        if (playerCamComp != null) playerCamComp.enabled = true;
-        if (moveCamScript != null) moveCamScript.enabled = true;
 
-        yield return Fade(1f, 0f, fadeDuration);
+        // Sync PlayerCam BEFORE enabling it (prevents snapping)
+        if (playerCamComp != null)
+        {
+            playerCamComp.SetRotation(camTf.rotation);
+            playerCamComp.enabled = true;
+        }
+
+        if (moveCamScript != null)
+            moveCamScript.enabled = true;
+
         overlayCanvas.enabled = false;
         running = false;
     }
