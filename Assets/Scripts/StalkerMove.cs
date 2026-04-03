@@ -113,6 +113,7 @@ public class StalkerMove : MonoBehaviour
 
     [Header("Audio")]
     public AudioSource audioSource;
+    public AudioSource scream;
     public AudioClip[] footstepSounds;
     public float stepInterval = 0.5f;
     [Range(0f, 1f)] public float footstepVolume = 0.8f;
@@ -129,11 +130,18 @@ public class StalkerMove : MonoBehaviour
     float playerSeeTimer = 0f;
     float playerLookAwayTimer = 0f;
     private float stepTimer;
+    float activationTime;
 
     int currentDynamicPatrolIndex = -1;
     List<int> currentNearbyPatrolIndices = new List<int>();
 
     Transform playerTransformCached;
+
+    void Awake()
+    {
+        var playerObj = GameObject.FindGameObjectWithTag(targetTag);
+        if (playerObj != null) playerTransformCached = playerObj.transform;
+    }
 
     void Start()
     {
@@ -152,9 +160,6 @@ public class StalkerMove : MonoBehaviour
 
         if (animator == null)
             animator = GetComponent<Animator>() ?? GetComponentInChildren<Animator>();
-
-        var playerObj = GameObject.FindGameObjectWithTag(targetTag);
-        if (playerObj != null) playerTransformCached = playerObj.transform;
     }
 
     void Update()
@@ -277,6 +282,7 @@ public class StalkerMove : MonoBehaviour
     public void Activate()
     {
         activated = true;
+        activationTime = Time.time;
         hasBeenSeenByPlayer = true;
 
         if (agent != null)
@@ -286,18 +292,10 @@ public class StalkerMove : MonoBehaviour
         {
             if (!string.IsNullOrEmpty(triggeredBoolName))
                 animator.SetBool(triggeredBoolName, true);
-
-            // Start walking immediately on activation
-            if (!string.IsNullOrEmpty(walkParamName))
-                animator.SetBool(walkParamName, true);
-            if (!string.IsNullOrEmpty(runParamName))
-                animator.SetBool(runParamName, false);
         }
 
         if (activationPromptUI != null)
             StartCoroutine(ShowPrompt());
-
-        Debug.Log($"StalkerMove.Activate() called on '{gameObject.name}'");
     }
 
     IEnumerator ShowPrompt()
@@ -310,6 +308,8 @@ public class StalkerMove : MonoBehaviour
     void UpdateTarget()
     {
         if (playerTransformCached == null) return;
+        if (Time.time < activationTime + 0.1f)
+            return;
 
         Transform target = playerTransformCached;
         float dist = Vector3.Distance(transform.position, target.position);
@@ -354,6 +354,10 @@ public class StalkerMove : MonoBehaviour
         {
             if (!isChasing)
             {
+                
+                Debug.Log("Stalker spotted the player and screamed!");
+                scream.Play();
+                
                 GameState currentState = GameManager.Instance.GetState();
                 if (currentState != GameState.Chased)
                 {
