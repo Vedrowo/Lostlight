@@ -1,14 +1,38 @@
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using UnityEngine.UI;
 
 public class menuScript : MonoBehaviour
 {
-    [Header("Settings")]
-    public float masterVolume = 1f;
-    public float mouseSensitivity = 1f;
-
     [Header("UI Panels")]
     public IntroPanel introPanelScript;
+
+    [Header("UI Sliders")]
+    public Slider volumeSlider;
+    public Slider sensitivityXSlider;
+    public Slider sensitivityYSlider;
+
+    void Start()
+    {
+        if (volumeSlider != null)
+        {
+            volumeSlider.onValueChanged.RemoveAllListeners();
+            volumeSlider.SetValueWithoutNotify(GameSettings.Instance.masterVolume);
+            volumeSlider.onValueChanged.AddListener(SetVolume);
+        }
+        if (sensitivityXSlider != null)
+        {
+            sensitivityXSlider.onValueChanged.RemoveAllListeners();
+            sensitivityXSlider.SetValueWithoutNotify(GameSettings.Instance.mouseSensitivityX);
+            sensitivityXSlider.onValueChanged.AddListener(SetSensitivityX);
+        }
+        if (sensitivityYSlider != null)
+        {
+            sensitivityYSlider.onValueChanged.RemoveAllListeners();
+            sensitivityYSlider.SetValueWithoutNotify(GameSettings.Instance.mouseSensitivityY);
+            sensitivityYSlider.onValueChanged.AddListener(SetSensitivityY);
+        }
+    }
 
     // Called by Play button
     public void PlayGame()
@@ -35,17 +59,19 @@ public class menuScript : MonoBehaviour
             settingsPanel.SetActive(!settingsPanel.activeSelf);
     }
 
-    // Example for slider changes
     public void SetVolume(float volume)
     {
-        masterVolume = volume;
-        // you can hook this into AudioListener or AudioMixer later
-        AudioListener.volume = masterVolume;
+        GameSettings.Instance.masterVolume = volume;
+        AudioListener.volume = volume;
     }
 
-    public void SetSensitivity(float sensitivity)
+    public void SetSensitivityX(float sensitivity)
     {
-        mouseSensitivity = sensitivity;
-        // store this for your player controller later
+        GameSettings.Instance.mouseSensitivityX = sensitivity;
+    }
+
+    public void SetSensitivityY(float sensitivity)
+    {
+        GameSettings.Instance.mouseSensitivityY = sensitivity;
     }
 }

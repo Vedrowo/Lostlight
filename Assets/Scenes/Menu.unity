@@ -151,9 +151,11 @@ MonoBehaviour:
   introPanel: {fileID: 715795054}
   introText: {fileID: 1461061283}
   storyLines:
-  - Hello
-  - Its me
-  - I was wondering if after all these years you'd like to meet
+  - The deeper you go, the colder it feels.
+  - 'The trees seem to close in behind you.
+
+'
+  - "And somewhere in the dark\u2026 something is watching."
   gameSceneName: MainGame
   fadeDuration: 1.5
 --- !u!4 &28264386
@@ -600,12 +602,24 @@ MonoBehaviour:
   m_HandleRect: {fileID: 50404272}
   m_Direction: 0
   m_MinValue: 0
-  m_MaxValue: 1
+  m_MaxValue: 500
   m_WholeNumbers: 0
   m_Value: 0
   m_OnValueChanged:
     m_PersistentCalls:
-      m_Calls: []
+      m_Calls:
+      - m_Target: {fileID: 886946185}
+        m_TargetAssemblyTypeName: menuScript, Assembly-CSharp
+        m_MethodName: SetSensitivityX
+        m_Mode: 4
+        m_Arguments:
+          m_ObjectArgument: {fileID: 0}
+          m_ObjectArgumentAssemblyTypeName: UnityEngine.Object, UnityEngine
+          m_IntArgument: 0
+          m_FloatArgument: 0
+          m_StringArgument: 
+          m_BoolArgument: 0
+        m_CallState: 2
 --- !u!1 &435271870
 GameObject:
   m_ObjectHideFlags: 0
@@ -747,8 +761,8 @@ MonoBehaviour:
   m_fontMaterials: []
   m_fontColor32:
     serializedVersion: 2
-    rgba: 4278190080
-  m_fontColor: {r: 0, g: 0, b: 0, a: 1}
+    rgba: 4294371048
+  m_fontColor: {r: 0.9098039, g: 0.9019608, b: 0.9647059, a: 1}
   m_enableVertexGradient: 0
   m_colorMode: 3
   m_fontColorGradient:
@@ -951,6 +965,53 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 474892732}
   m_CullTransparentMesh: 1
+--- !u!1 &499762150
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 499762152}
+  - component: {fileID: 499762151}
+  m_Layer: 0
+  m_Name: _gameSettings
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &499762151
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 499762150}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5cc86ecf3d94d89478f19d4d8b353eb9, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::GameSettings
+  masterVolume: 1
+  mouseSensitivityX: 200
+  mouseSensitivityY: 150
+--- !u!4 &499762152
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 499762150}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 53.97287, y: -0, z: -493.04922}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &615965957
 GameObject:
   m_ObjectHideFlags: 0
@@ -1395,8 +1456,8 @@ MonoBehaviour:
   m_fontMaterials: []
   m_fontColor32:
     serializedVersion: 2
-    rgba: 4278190080
-  m_fontColor: {r: 0, g: 0, b: 0, a: 1}
+    rgba: 4294371048
+  m_fontColor: {r: 0.9098039, g: 0.9019608, b: 0.9647059, a: 1}
   m_enableVertexGradient: 0
   m_colorMode: 3
   m_fontColorGradient:
@@ -1607,8 +1668,8 @@ MonoBehaviour:
   m_fontMaterials: []
   m_fontColor32:
     serializedVersion: 2
-    rgba: 4278190080
-  m_fontColor: {r: 0, g: 0, b: 0, a: 1}
+    rgba: 4294305255
+  m_fontColor: {r: 0.90710413, g: 0.89871836, b: 0.9622642, a: 1}
   m_enableVertexGradient: 0
   m_colorMode: 3
   m_fontColorGradient:
@@ -1717,10 +1778,10 @@ RectTransform:
   - {fileID: 1277577400}
   m_Father: {fileID: 905269386}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0, y: 0}
-  m_AnchorMax: {x: 1, y: 1}
+  m_AnchorMin: {x: 0.5, y: 0.5}
+  m_AnchorMax: {x: 0.5, y: 0.5}
   m_AnchoredPosition: {x: 0, y: 0}
-  m_SizeDelta: {x: 0, y: 0}
+  m_SizeDelta: {x: 1020.04, y: 1213.98}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &873703050
 MonoBehaviour:
@@ -1735,7 +1796,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
   m_Material: {fileID: 0}
-  m_Color: {r: 1, g: 1, b: 1, a: 0.392}
+  m_Color: {r: 1, g: 1, b: 1, a: 0.6}
   m_RaycastTarget: 1
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
@@ -1789,9 +1850,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d8f73cd9b4a19d944bc0fd78460a6990, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::menuScript
-  masterVolume: 1
-  mouseSensitivity: 1
   introPanelScript: {fileID: 28264385}
+  volumeSlider: {fileID: 1156487572}
+  sensitivityXSlider: {fileID: 143533523}
+  sensitivityYSlider: {fileID: 2078223032}
   settingsPanel: {fileID: 873703048}
 --- !u!4 &886946186
 Transform:
@@ -2242,7 +2304,19 @@ MonoBehaviour:
   m_Value: 0
   m_OnValueChanged:
     m_PersistentCalls:
-      m_Calls: []
+      m_Calls:
+      - m_Target: {fileID: 886946185}
+        m_TargetAssemblyTypeName: menuScript, Assembly-CSharp
+        m_MethodName: SetVolume
+        m_Mode: 4
+        m_Arguments:
+          m_ObjectArgument: {fileID: 0}
+          m_ObjectArgumentAssemblyTypeName: UnityEngine.Object, UnityEngine
+          m_IntArgument: 0
+          m_FloatArgument: 0
+          m_StringArgument: 
+          m_BoolArgument: 0
+        m_CallState: 2
 --- !u!1 &1182006717
 GameObject:
   m_ObjectHideFlags: 0
@@ -3685,12 +3759,24 @@ MonoBehaviour:
   m_HandleRect: {fileID: 2063700143}
   m_Direction: 0
   m_MinValue: 0
-  m_MaxValue: 1
+  m_MaxValue: 500
   m_WholeNumbers: 0
   m_Value: 0
   m_OnValueChanged:
     m_PersistentCalls:
-      m_Calls: []
+      m_Calls:
+      - m_Target: {fileID: 886946185}
+        m_TargetAssemblyTypeName: menuScript, Assembly-CSharp
+        m_MethodName: SetSensitivityY
+        m_Mode: 4
+        m_Arguments:
+          m_ObjectArgument: {fileID: 0}
+          m_ObjectArgumentAssemblyTypeName: UnityEngine.Object, UnityEngine
+          m_IntArgument: 0
+          m_FloatArgument: 0
+          m_StringArgument: 
+          m_BoolArgument: 0
+        m_CallState: 2
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
@@ -3701,3 +3787,4 @@ SceneRoots:
   - {fileID: 1476876328}
   - {fileID: 886946186}
   - {fileID: 28264386}
+  - {fileID: 499762152}

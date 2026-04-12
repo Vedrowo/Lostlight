@@ -3,6 +3,7 @@ using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.Rendering;
 using UnityEngine.Rendering.Universal;
+using TMPro;
 
 public class CaptureSequence : MonoBehaviour
 {
@@ -37,6 +38,9 @@ public class CaptureSequence : MonoBehaviour
 
     [Header("Optional stalker teleport")]
     public Transform inspectorStalkerDestination;
+
+    [Header("Tooltip")]
+    public TextMeshProUGUI promptText;
 
     Canvas overlayCanvas;
     Image overlayImage;
@@ -154,7 +158,6 @@ public class CaptureSequence : MonoBehaviour
             }
         }
 
-        // use cached camera references; re-find only if null (e.g. scene reload)
         if (playerCamComp == null) playerCamComp = FindObjectOfType<PlayerCam>();
         if (playerCamComp != null && cameraHolder == null)
         {
@@ -272,8 +275,8 @@ public class CaptureSequence : MonoBehaviour
         // FULL blackout
         yield return Fade(0f, 1f, fadeDuration);
 
-        // Stay unconscious (this is what was missing!)
-        yield return new WaitForSeconds(2.2f); // tweak 1.5–3.5 for feel
+        // Stay unconscious 
+        yield return new WaitForSeconds(2.2f);
 
         // --- TELEPORT WHILE SCREEN IS BLACK ---
         Vector3 wakePosition = finalWakePos;
@@ -435,6 +438,18 @@ public class CaptureSequence : MonoBehaviour
 
         overlayCanvas.enabled = false;
         running = false;
+
+        StartCoroutine(ShowPrompt("Blind the Stalker by shining your flashlight at its eyes!", 3f));
+    }
+
+    IEnumerator ShowPrompt(string message, float duration)
+    {
+        promptText.text = message;
+        promptText.gameObject.SetActive(true);
+
+        yield return new WaitForSeconds(duration);
+
+        promptText.gameObject.SetActive(false);
     }
 
     void SetVignette(float intensity)

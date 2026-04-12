@@ -2,14 +2,15 @@ using UnityEngine;
 
 public class PlayerCam : MonoBehaviour
 {
-    public float sensX;
-    public float sensY;
-
     public Transform orientation;
 
     float xRotation;
     float yRotation;
 
+    void Awake()
+    {
+        GameSettings.EnsureExists();
+    }
 
     void Start()
     {
@@ -19,8 +20,8 @@ public class PlayerCam : MonoBehaviour
 
     void Update()
     {
-        float mouseX = Input.GetAxisRaw("Mouse X") * Time.deltaTime * sensX;
-        float mouseY = Input.GetAxisRaw("Mouse Y") * Time.deltaTime * sensY;
+        float mouseX = Input.GetAxisRaw("Mouse X") * Time.deltaTime * GameSettings.Instance.mouseSensitivityX;
+        float mouseY = Input.GetAxisRaw("Mouse Y") * Time.deltaTime * GameSettings.Instance.mouseSensitivityY;
 
         yRotation += mouseX;
         xRotation -= mouseY;
@@ -30,12 +31,10 @@ public class PlayerCam : MonoBehaviour
         orientation.rotation = Quaternion.Euler(0, yRotation, 0);
     }
 
-    // Force the internal rotation state and transform to the given rotation.
-    // This keeps internal xRotation/yRotation in sync when CaptureSequence manipulates camera.
     public void SetRotation(Quaternion rot)
     {
         Vector3 e = rot.eulerAngles;
-        // convert Unity euler (0..360) to signed pitch in -180..180 so clamping behaves consistently
+
         float pitch = e.x;
         if (pitch > 180f) pitch -= 360f;
 
