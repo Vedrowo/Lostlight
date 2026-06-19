@@ -5478,6 +5478,7 @@ MonoBehaviour:
     m_PostInfinity: 2
     m_RotationOrder: 4
   moonYawOffset: 0
+  moonIntensityMultiplier: 0.3
   enableFog: 1
   fogColorOverDay:
     serializedVersion: 2
@@ -5566,7 +5567,8 @@ MonoBehaviour:
   skyboxNightThreshold: 0.05
   nightSkyExposure: 0.04
   nightAtmosphericThickness: 0.05
-  nightThreshold: 0.18
+  nightThreshold: 0.25
+  debugLogInterval: 1
 --- !u!4 &825115969
 Transform:
   m_ObjectHideFlags: 0
@@ -6697,7 +6699,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 5da3e47812bce0b49a9a9113733a4a84, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::StalkerMove
-  speed: 8
+  speed: 9
   targetTag: Player
   detectionRadius: 60
   constantlySearchForTarget: 1
@@ -6706,8 +6708,8 @@ MonoBehaviour:
   obstacleMask:
     serializedVersion: 2
     m_Bits: 192
-  hearingRadius: 40
-  loudHearingMultiplier: 1.6
+  hearingRadius: 65
+  loudHearingMultiplier: 1.3
   chasePersistence: 2.5
   searchRadius: 6
   searchPointInterval: 1.2
@@ -6727,7 +6729,7 @@ MonoBehaviour:
   - {fileID: 831950463}
   patrolRadiusAroundPlayer: 200
   waypointTolerance: 0.5
-  chaseSpeedMultiplier: 3.5
+  chaseSpeedMultiplier: 3
   attackCooldown: 2
   attackStartRange: 1.6
   attackRangeBuffered: 3
@@ -6746,8 +6748,8 @@ MonoBehaviour:
   stunBuildTime: 2
   stunDecayTime: 1.2
   stunDuration: 8
-  stunAngle: 25
-  stunMaxDistance: 20
+  stunAngle: 30
+  stunMaxDistance: 25
   stunDurationRequired: 0.8
   autoActivateByPlayerSight: 1
   activationProximity: 30
@@ -8495,7 +8497,7 @@ MonoBehaviour:
   hasBeenCaught: 0
   currentState: 0
   audioManager: {fileID: 1913988924}
-  explorationStartTime: 15
+  explorationStartTime: 13
   explorationMaxTime: 24
   nightTime: 24
   timeTransitionDuration: 3

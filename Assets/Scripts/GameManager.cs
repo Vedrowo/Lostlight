@@ -22,7 +22,7 @@ public class GameManager : MonoBehaviour
 
     [Header("Time of Day")]
     [Tooltip("Starting time in Exploration.")]
-    public float explorationStartTime = 15f;
+    public float explorationStartTime = 13f;
     [Tooltip("Maximum time during Exploration — cycle stops here.")]
     public float explorationMaxTime = 24f;
     [Tooltip("Time set when player wakes up after being caught.")]

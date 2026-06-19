@@ -30,6 +30,8 @@ public class SunlightControl : MonoBehaviour
     public Gradient moonColorOverNight = DefaultMoonGradient();
     public AnimationCurve moonIntensityOverNight = DefaultMoonIntensityCurve();
     public float moonYawOffset = 10f;
+    [Tooltip("Overall multiplier applied to moon intensity so you can tune moon brightness from the inspector.")]
+    public float moonIntensityMultiplier = 0.5f;
 
     [Header("Fog (global)")]
     public bool enableFog = true;
@@ -51,7 +53,7 @@ public class SunlightControl : MonoBehaviour
     public float skyboxNightThreshold = 0.05f;
     [Tooltip("Minimum skybox exposure at night (gives a faint moonlit glow, 0 = pure black).")]
     [Range(0f, 0.15f)]
-    public float nightSkyExposure = 0.04f;
+    public float nightSkyExposure = 0.08f;
     [Tooltip("Minimum atmospheric thickness at night.")]
     [Range(0f, 0.3f)]
     public float nightAtmosphericThickness = 0.05f;
@@ -66,9 +68,13 @@ public class SunlightControl : MonoBehaviour
     bool _sunIsActive = true;
     float _lastSkyExposure = -1f;
 
-    // -------------------------------------------------------------------------
-    // Unity lifecycle
-    // -------------------------------------------------------------------------
+    // Debug logging
+    [Header("Debug")]
+    [Tooltip("Seconds between periodic debug log messages.")]
+    public float debugLogInterval = 1f;
+    float _debugTimer = 0f;
+    bool _lastSunAbove = false;
+    bool _lastMoonAbove = false;
 
     void Awake()
     {
@@ -97,11 +103,56 @@ public class SunlightControl : MonoBehaviour
     {
         if (autoCycle)
             ShiftTime(Time.deltaTime * hoursPerSecond);
-    }
 
-    // -------------------------------------------------------------------------
-    // Public API
-    // -------------------------------------------------------------------------
+        // Debug timer & horizon checks (logs once per interval and on state changes)
+        _debugTimer -= Time.deltaTime;
+        bool sunAbove = false;
+        bool moonAbove = false;
+        float n = NormalizeHours(timeOfDay) / 24f;
+
+        // sun / moon above horizon tests
+        if (sun != null)
+            sunAbove = Vector3.Dot(-sun.transform.forward, Vector3.up) > 0f;
+        if (moon != null)
+            moonAbove = Vector3.Dot(-moon.transform.forward, Vector3.up) > 0f;
+
+        // compute values we also use for rendering so the log matches visuals
+        float sunScale = sunIntensityOverDay.Evaluate(n);
+        float moonCurveT = Mathf.Repeat(n + 0.5f, 1f);
+        float moonIntensity = moonIntensityOverNight.Evaluate(moonCurveT) * moonIntensityMultiplier;
+
+        float skyT = Mathf.InverseLerp(skyboxNightThreshold, skyboxDayThreshold, sunScale);
+        float skyExp = Mathf.Lerp(nightSkyExposure, 1.0f, skyT);
+        bool skyHasExposure = RenderSettings.skybox != null && RenderSettings.skybox.HasProperty("_Exposure");
+        bool skyHasAtmos = RenderSettings.skybox != null && RenderSettings.skybox.HasProperty("_AtmosphericThickness");
+
+        float nightProgress = ComputeNightProgress(n);
+
+        if (_debugTimer <= 0f || sunAbove != _lastSunAbove || moonAbove != _lastMoonAbove)
+        {
+            _debugTimer = debugLogInterval;
+            _lastSunAbove = sunAbove;
+            _lastMoonAbove = moonAbove;
+
+            Debug.Log(string.Format(
+                "Time: {0:F2}h | SunAbove: {1} | MoonAbove: {2} | SunScale: {3:F3} | MoonIntensity: {4:F3} | SkyExp: {5:F3} | SkyHasProps: EXP={6} ATM={7} | NightProgress: {8:F3}",
+                timeOfDay, sunAbove, moonAbove, sunScale, moonIntensity, skyExp, skyHasExposure, skyHasAtmos, nightProgress));
+        }
+
+        // Immediate night darkening: when moon is above horizon force a very low exposure
+        // so the skybox goes dark instantly at the start of night.
+        if (moonAbove && RenderSettings.skybox != null && RenderSettings.skybox.HasProperty("_Exposure"))
+        {
+            // Choose a very low exposure immediately when moon rises.
+            // Use either a hard floor or scale down the inspector value; keep minimum to avoid exactly 0.
+            float immediateExp = Mathf.Max(0.002f, nightSkyExposure * 0.05f);
+            if (Mathf.Abs(immediateExp - _lastSkyExposure) > 0.001f)
+            {
+                RenderSettings.skybox.SetFloat("_Exposure", immediateExp);
+                _lastSkyExposure = immediateExp;
+            }
+        }
+    }
 
     /// <summary>Set absolute time in hours (0..24). Pass smoothDuration > 0 for a smooth transition.</summary>
     public void SetTimeOfDay(float hours, float smoothDuration = 0f)
@@ -119,10 +170,6 @@ public class SunlightControl : MonoBehaviour
     {
         SetTimeOfDay(timeOfDay + deltaHours, smoothDuration);
     }
-
-    // -------------------------------------------------------------------------
-    // Internal helpers
-    // -------------------------------------------------------------------------
 
     static float NormalizeHours(float h)
     {
@@ -180,7 +227,8 @@ public class SunlightControl : MonoBehaviour
 
         // Remap so moonCurveT = 0.5 at midnight regardless of wall-clock wrap
         float moonCurveT = Mathf.Repeat(n + 0.5f, 1f);
-        moon.intensity = moonIntensityOverNight.Evaluate(moonCurveT) * 0.15f;
+        // use inspector-tunable multiplier instead of hard-coded 0.15
+        moon.intensity = moonIntensityOverNight.Evaluate(moonCurveT) * moonIntensityMultiplier;
         moon.color = moonColorOverNight.Evaluate(n);
     }
 
@@ -211,7 +259,10 @@ public class SunlightControl : MonoBehaviour
         );
 
         float sunScale = sunIntensityOverDay.Evaluate(n);
-        float moonScale = nightProgress;
+
+        // compute moonScale from the moon intensity curve (shifted) so the moon contributes gradually
+        float moonCurveT = Mathf.Repeat(n + 0.5f, 1f);
+        float moonScale = moonIntensityOverNight.Evaluate(moonCurveT) * moonIntensityMultiplier;
 
         // --- 1. Fog ---
         if (enableFog)
@@ -223,35 +274,57 @@ public class SunlightControl : MonoBehaviour
                                         * Mathf.Lerp(1f, nightFogMultiplier, nightProgress);
         }
 
-        // --- 2. Ambient ---
-        float ambientFloor = 0.15f;
+        // --- 2. Ambient (FIXED NIGHT BRIGHTNESS) ---
+
+        float ambientFloor = 0.08f; // darker base night
+
+        // Make night darker at the beginning, brighter at midnight
+        float moonAmbient = moonScale * Mathf.Lerp(0.1f, 0.35f, nightProgress);
+
+        // Final blend
+        float targetAmbient =
+            sunScale > 0.1f
+            ? sunScale
+            : moonAmbient;
+
+        // Apply
         RenderSettings.ambientIntensity = Mathf.Lerp(
-            ambientFloor, 1f,
-            sunScale > 0.1f ? sunScale : moonScale * 0.35f
+            ambientFloor,
+            1f,
+            targetAmbient
         );
 
         // --- 3. Skybox ---
-        // Smoothly lerp exposure between full day and a faint night glow.
-        // skyboxDayThreshold  -> full day exposure (1.0)
-        // skyboxNightThreshold -> night exposure (nightSkyExposure)
         if (RenderSettings.skybox != null)
         {
             float skyT = Mathf.InverseLerp(skyboxNightThreshold, skyboxDayThreshold, sunScale);
             float skyExp = Mathf.Lerp(nightSkyExposure, 1.0f, skyT);
             float skyAtmo = Mathf.Lerp(nightAtmosphericThickness, 1f, skyT);
 
-            // Only write material properties when they change meaningfully (avoid per-frame material dirtying)
-            if (Mathf.Abs(skyExp - _lastSkyExposure) > 0.001f)
+            // Reduce exposure further during night using nightProgress so the sky gets much darker
+            // as nightProgress approaches 1 (midnight). The factor 0.25f pushes full-night exposure
+            // well below the inspector `nightSkyExposure` so the sky doesn't remain too bright.
+            float finalSkyExp = Mathf.Lerp(skyExp, nightSkyExposure * 0.25f, nightProgress);
+
+            // Safety clamp to avoid completely zero exposure
+            finalSkyExp = Mathf.Max(finalSkyExp, 0.005f);
+
+            if (Mathf.Abs(finalSkyExp - _lastSkyExposure) > 0.001f)
             {
-                RenderSettings.skybox.SetFloat("_Exposure", skyExp);
+                RenderSettings.skybox.SetFloat("_Exposure", finalSkyExp);
                 RenderSettings.skybox.SetFloat("_AtmosphericThickness", skyAtmo);
 
-                _lastSkyExposure = skyExp;
+                _lastSkyExposure = finalSkyExp;
             }
         }
 
         // --- 4. Primary sun swap (fires only once per transition) ---
-        bool wantSun = nightProgress <= 0.5f;
+        // Switch based on actual sun position, not abstract curve
+        bool sunAboveHorizon = sun != null &&
+            Vector3.Dot(-sun.transform.forward, Vector3.up) > 0f;
+
+        bool wantSun = sunAboveHorizon;
+
         if (wantSun != _sunIsActive)
         {
             _sunIsActive = wantSun;
@@ -270,13 +343,21 @@ public class SunlightControl : MonoBehaviour
         g.SetKeys(
             new GradientColorKey[]
             {
-                new GradientColorKey(new Color(0.05f, 0.05f, 0.12f), 0f),
-                new GradientColorKey(new Color(1f,    0.5f,  0.2f),  0.2f),
-                new GradientColorKey(new Color(1f,    1f,    0.95f), 0.5f),
-                new GradientColorKey(new Color(1f,    0.5f,  0.2f),  0.8f),
-                new GradientColorKey(new Color(0.05f, 0.05f, 0.12f), 1f)
+            new GradientColorKey(new Color(0.08f, 0.1f, 0.2f), 0f),
+
+            new GradientColorKey(new Color(1f, 0.55f, 0.25f), 0.22f),
+
+            new GradientColorKey(new Color(1f, 1f, 1f), 0.5f),
+
+            new GradientColorKey(new Color(1f, 0.5f, 0.2f), 0.78f),
+
+            new GradientColorKey(new Color(0.08f, 0.1f, 0.2f), 1f)
             },
-            new GradientAlphaKey[] { new GradientAlphaKey(1f, 0f), new GradientAlphaKey(1f, 1f) }
+            new GradientAlphaKey[]
+            {
+            new GradientAlphaKey(1f, 0f),
+            new GradientAlphaKey(1f, 1f)
+            }
         );
         return g;
     }
@@ -284,11 +365,11 @@ public class SunlightControl : MonoBehaviour
     static AnimationCurve DefaultIntensityCurve()
     {
         return new AnimationCurve(
-            new Keyframe(0f, 0.05f),
-            new Keyframe(0.2f, 0.6f),
+            new Keyframe(0f, 0f),
+            new Keyframe(0.20f, 0.7f),
             new Keyframe(0.5f, 1f),
-            new Keyframe(0.8f, 0.6f),
-            new Keyframe(1f, 0.05f)
+            new Keyframe(0.75f, 0.05f), // SUN DROPS FAST AFTER 18:00
+            new Keyframe(1f, 0f)
         );
     }
 
@@ -337,11 +418,11 @@ public class SunlightControl : MonoBehaviour
     static AnimationCurve DefaultMoonIntensityCurve()
     {
         return new AnimationCurve(
-            new Keyframe(0f, 0f),
-            new Keyframe(0.25f, 0.2f),
-            new Keyframe(0.5f, 0.35f),
-            new Keyframe(0.75f, 0.2f),
-            new Keyframe(1f, 0f)
+            new Keyframe(0f, 0.1f),     // early night already visible
+            new Keyframe(0.25f, 0.25f),
+            new Keyframe(0.5f, 0.45f),  // midnight strongest
+            new Keyframe(0.75f, 0.25f),
+            new Keyframe(1f, 0.1f)
         );
     }
 }
