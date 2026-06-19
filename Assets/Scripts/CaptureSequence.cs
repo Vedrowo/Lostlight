@@ -42,6 +42,13 @@ public class CaptureSequence : MonoBehaviour
     [Header("Tooltip")]
     public TextMeshProUGUI promptText;
 
+    [Header("Wake time")]
+    [Tooltip("If true, the sunlight time will be overridden while the player is unconscious.")]
+    public bool overrideTimeOnWake = true;
+    [Tooltip("Time (hours 0-24) to set the SunlightControl to while the player is unconscious (prevents abrupt visible jumps at wake).")]
+    [Range(0f, 24f)]
+    public float wakeTimeOfDay = 20f;
+
     Canvas overlayCanvas;
     Image overlayImage;
     bool running;
@@ -341,6 +348,16 @@ public class CaptureSequence : MonoBehaviour
 
         if (camTf != null)
             camTf.rotation = lyingRot;
+
+        // --- SET TIME OF DAY BEFORE WAKE (prevents abrupt visible jump) ---
+        if (overrideTimeOnWake)
+        {
+            var sunCtrl = FindObjectOfType<SunlightControl>();
+            if (sunCtrl != null)
+            {
+                sunCtrl.SetTimeOfDay(wakeTimeOfDay, 0f); // immediate set while screen is black
+            }
+        }
 
         // --- WAKE UP (FADE IN) ---
         yield return Fade(1f, 0f, fadeDuration);

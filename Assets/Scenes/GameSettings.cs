@@ -4,7 +4,7 @@ public class GameSettings : MonoBehaviour
 {
     public static GameSettings Instance { get; private set; }
 
-    public float masterVolume = 1f;
+    public float masterVolume = 10f;
     public float mouseSensitivityX = 200f;
     public float mouseSensitivityY = 150f;
 
